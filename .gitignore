@@ -1,0 +1,7 @@
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+__pycache__/
+.idea/
+venv/
+config.py
