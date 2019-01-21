@@ -1,0 +1,9 @@
+python-telegram-bot
+flask
+numpy
+beautifulsoup4
+jieba
+wordcloud
+pandas
+lxml
+aiohttp

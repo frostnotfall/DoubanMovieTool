@@ -9,6 +9,9 @@ import threading
 import time
 from http import cookiejar
 from urllib import request
+import requests
+
+from telegram.ext import (BaseFilter)
 
 import douban_movie_comments as dmc
 
@@ -26,10 +29,14 @@ ua = [
      Chrome/64.0.3282.189 Safari/537.36 Vivaldi/1.95.1077.60"
 ]
 ua = random.choice(ua)
-head = {'Connection': 'Keep-Alive', 'Accept': 'text/html,application/xhtml+xml,application/xml;'
-        'q=0.9,image/webp,image/apng,*/*;q=0.8',
+head = {'Connection': 'Keep-Alive',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;'
+                  'q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
         'Accept-Language': 'zh-CN,zh;q=0.9',
-        'User-Agent': ua}
+        'Cache-Control': 'max-age=0',
+        'User-Agent': ua
+        }
 
 
 def save_cookie():
@@ -42,7 +49,7 @@ def save_cookie():
         header.append(elem)
     opener.add_headers = header
 
-    opener.open('http://movie.douban.com')
+    opener.open('https://movie.douban.com')
     cookie.save(ignore_discard=True, ignore_expires=True)
 
 
@@ -57,6 +64,16 @@ def my_opener():
         header.append(elem)
     opener.add_headers = header
     return opener
+
+
+def my_requests():
+    cookie = cookiejar.MozillaCookieJar()
+    cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
+    load_cookies = requests.utils.dict_from_cookiejar(cookie)
+    s = requests.Session()
+    s.cookies = requests.utils.cookiejar_from_dict(load_cookies)
+    s.headers.update(head)
+    return s
 
 
 class MyThread(threading.Thread):
@@ -77,6 +94,15 @@ class MyThread(threading.Thread):
             return None
 
 
+class FilterNowplaying(BaseFilter):
+    def __init__(self, text):
+        self.text = text
+
+    def filter(self, message):
+        return self.text in message.text
+
+
+# 定义菜单按钮
 def build_menu(buttons,
                n_cols,
                header_buttons=None,
@@ -89,6 +115,7 @@ def build_menu(buttons,
     return menu
 
 
+# 预缓存
 def preload():
     movie_list = dmc.load()
     for i in movie_list:
