@@ -3,5 +3,6 @@ ehthumbs.db
 Desktop.ini
 __pycache__/
 .idea/
+img/
 venv/
 config.py
