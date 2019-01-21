@@ -3,7 +3,6 @@
 
 
 """
-@version: 1.4.8
 @Python version:3.6
 @author: frostnotfall
 @license: MIT License
@@ -21,16 +20,16 @@ from telegram import (Bot, ChatAction, InlineKeyboardButton, InlineKeyboardMarku
 from telegram.ext import (Dispatcher, CallbackQueryHandler, CommandHandler, Filters, MessageHandler,
                           Updater)
 
-import douban_movie_comments as dmc
+import funcs
 import util
 from config import token, host
 
-## 使用 webhook 方式
+# 使用 webhook 方式
 app = Flask(__name__)
 bot = Bot(token=token)
 dispatcher = Dispatcher(bot, None)
 
-## 使用轮询方式
+# 使用轮询方式
 # updater = Updater(TOKEN)
 # dispatcher = updater.dispatcher
 
@@ -112,7 +111,7 @@ def now_playing(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 获取电影列表')
 
-    movie_list = dmc.load()
+    movie_list = funcs.load()
 
     button_list = []
     for i in movie_list:
@@ -136,7 +135,7 @@ def coming(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 使用新片榜')
 
-    movie_list, id_list = dmc.new_movies()
+    movie_list, id_list = funcs.new_movies()
     range_len_movie_list = range(len(movie_list))
     button_list = []
     for i in range_len_movie_list:
@@ -160,7 +159,7 @@ def coming(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 使用即将上映')
 
-    movie_list, id_list = dmc.coming()
+    movie_list, id_list = funcs.coming()
     range_len_movie_list = range(len(movie_list))
     button_list = []
     for i in range_len_movie_list:
@@ -190,7 +189,7 @@ def movie_search(bot, update):
                          text="请输入电影名称")
 
     if movie_name != '电影搜索':
-        movie_list, id_list = dmc.movie_search(movie_name)
+        movie_list, id_list = funcs.movie_search(movie_name)
 
         range_len_movie_list = range(len(movie_list))
         button_list = []
@@ -217,7 +216,7 @@ def movie_keyboard(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 查询电影，ID：' + id_)
 
-    movie_image_text, title_text, directors_text, score, countries, genres, actors_text, summary = dmc.movie_info(
+    movie_image_text, title_text, directors_text, score, countries, genres, actors_text, summary = funcs.movie_info(
         id_)
 
     bot.send_message(chat_id=update.callback_query.message.chat_id,
@@ -249,7 +248,7 @@ def movie_keyboard(bot, update):
             msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
                                       text="正在遍历该电影所有影评\n由于评论有几万条，请耐心等待").message_id
 
-            dmc.save_img(id_)
+            funcs.save_img(id_)
             bot.send_photo(chat_id=update.callback_query.message.chat_id,
                            photo=open("./img/" + id_ + '.jpg', 'rb'))
             bot.delete_message(chat_id=update.callback_query.message.chat_id, message_id=msg_id)
@@ -274,13 +273,13 @@ def start(bot, update):
 if __name__ == '__main__':
     util.save_cookie()
 
-    ## 轮询方式
+    # 轮询方式
     # updater.start_polling()
 
-    ## webhook 方式
+    # webhook 方式
     app.run(host='127.0.0.1',
             port=8443,
             debug=True)
 
-    ## 预缓存，默认不开启
+    # 预缓存，默认不开启
     # util.background()

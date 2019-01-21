@@ -10,7 +10,7 @@ from urllib import parse
 import aiohttp
 import jieba
 import lxml
-import matplotlib as mpl
+# import matplotlib as mpl
 import numpy
 import pandas
 from bs4 import BeautifulSoup
@@ -257,7 +257,7 @@ def save_img(id_):
         temp = (key, word_frequency[key])
         word_frequency_list.append(temp)
 
-    mpl.rcParams['figure.figsize'] = (5.0, 2.5)
+    # mpl.rcParams['figure.figsize'] = (5.0, 2.5)
 
     try:
         wordcloud = wordcloud.fit_words(dict(word_frequency_list))

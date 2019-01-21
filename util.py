@@ -13,7 +13,7 @@ import requests
 
 from telegram.ext import (BaseFilter)
 
-import douban_movie_comments as dmc
+import funcs
 
 ua = [
     "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)\
@@ -117,12 +117,12 @@ def build_menu(buttons,
 
 # 预缓存
 def preload():
-    movie_list = dmc.load()
+    movie_list = funcs.load()
     for i in movie_list:
         if os.path.exists(os.getcwd() + "./img/" + i['id'] + '.jpg') is False:
             print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
                   '：' + "预缓存，电影ID：" + i['id'])
-            dmc.save_img(i['id'])
+            funcs.save_img(i['id'])
             time.sleep(60)
 
 
