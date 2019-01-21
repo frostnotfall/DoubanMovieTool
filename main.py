@@ -259,17 +259,6 @@ def movie_keyboard(bot, update):
     print("电影详情-执行时间:", end_time - start_time)
 
 
-# 命令：/test，测试用途
-@command(CommandHandler, 'test')
-@send_typing_action
-def start(bot, update):
-    # bot.send_photo(chat_id=update.message.chat_id, photo='https://telegram.org/img/t_logo.png')
-    bot.send_message(chat_id=update.message.chat_id,
-                     text="<a href='https://i.stack.imgur.com/iqJTR.jpg' rel='nofollow noreferrer'>caption sample\n666\n</a>"
-                          "<a href='https://telegram.org/img/t_logo.png' rel='nofollow noreferrer'>111\n222</a>",
-                     parse_mode=ParseMode.HTML)
-
-
 if __name__ == '__main__':
     util.save_cookie()
 

@@ -10,16 +10,12 @@ from urllib import parse
 import aiohttp
 import jieba
 import lxml
-# import matplotlib as mpl
 import numpy
 import pandas
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
 
 import util
-
-# mpl.use('Agg')
-# import matplotlib.pyplot as plt
 
 
 def load():
@@ -134,55 +130,6 @@ def movie_info(id_):
         summary = json_data['summary']
 
     return movie_image_text, title_text, directors_text, score, countries, genres, actors_text, summary
-
-
-''' 旧方法
-def get_comments(id_):
-    def visit_url(url):
-        try:
-            with util.my_opener().open(url) as comment_url:
-                comment_url_data = comment_url.read().decode('utf-8')
-
-        except error.HTTPError as e:
-            print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' +
-                  '递归请求url：' + url + ' 出错，错误码：', e.code)
-            return comments_all
-        else:
-            soup = BeautifulSoup(comment_url_data, 'html.parser')
-            all_comment_div = soup.find('div', class_='mod-bd')
-
-            comments_list = []
-            for item in all_comment_div.find_all('div', class_='comment'):
-                each_comment = item.find('p').find('span').string
-                if each_comment is not None:
-                    comments_list.append(each_comment)
-
-            comments = ''
-            for k in range(len(comments_list)):
-                comments = comments + (str(comments_list[k])).strip()
-
-            # \u4e00-\u9fa5 Unicode汉字编码范围
-            pattern = re.compile(r'[\u4e00-\u9fa5]+')
-            filter_data = re.findall(pattern, comments)
-            cleaned_comments = ''.join(filter_data)
-
-            return cleaned_comments
-
-    li = []
-    for i in range(10):
-        req_thread = util.MyThread(visit_url, args=('https://movie.douban.com/subject/' + str(id_) +
-                                                    '/comments' + '?start=' + str(i * 20) +
-                                                    '&limit=20&sort=new_score&status=P&percent_type=',))
-        li.append(req_thread)
-        req_thread.start()
-
-    comments_all = ''
-    for t in li:
-        t.join()
-
-        comments_all += t.get_result()
-    return comments_all
-'''
 
 
 def get_comments(id_):

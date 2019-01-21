@@ -9,8 +9,6 @@ import threading
 import time
 from http import cookiejar
 from urllib import request
-import requests
-
 from telegram.ext import (BaseFilter)
 
 import funcs
@@ -64,16 +62,6 @@ def my_opener():
         header.append(elem)
     opener.add_headers = header
     return opener
-
-
-def my_requests():
-    cookie = cookiejar.MozillaCookieJar()
-    cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
-    load_cookies = requests.utils.dict_from_cookiejar(cookie)
-    s = requests.Session()
-    s.cookies = requests.utils.cookiejar_from_dict(load_cookies)
-    s.headers.update(head)
-    return s
 
 
 class MyThread(threading.Thread):
