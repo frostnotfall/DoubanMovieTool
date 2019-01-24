@@ -5,10 +5,12 @@
 import datetime
 import os
 import random
+import re
 import threading
-import time
 from http import cookiejar
 from urllib import request
+
+import time
 from telegram.ext import (BaseFilter)
 
 import funcs
@@ -82,12 +84,14 @@ class MyThread(threading.Thread):
             return None
 
 
-class FilterNowplaying(BaseFilter):
+class CustomFilter(BaseFilter):
     def __init__(self, text):
         self.text = text
 
     def filter(self, message):
-        return self.text in message.text
+        # return self.text in message.text
+        if re.search(self.text, message.text):
+            return True
 
 
 # 定义菜单按钮

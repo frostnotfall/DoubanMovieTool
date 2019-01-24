@@ -7,7 +7,7 @@
 @author: frostnotfall
 @license: MIT License
 @contact: frostnotfall@gmail.com
-@software: douban_movie_comments_keywords
+@software: douban_movie_tool
 """
 
 import datetime
@@ -16,8 +16,8 @@ from functools import wraps
 
 from flask import Flask, request
 from telegram import (Bot, ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
-                      ParseMode, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update)
-from telegram.ext import (Dispatcher, CallbackQueryHandler, CommandHandler, Filters, MessageHandler,
+                      ParseMode, ReplyKeyboardMarkup, Update)
+from telegram.ext import (Dispatcher, CallbackQueryHandler, CommandHandler, MessageHandler,
                           Updater)
 
 import funcs
@@ -30,7 +30,7 @@ bot = Bot(token=token)
 dispatcher = Dispatcher(bot, None)
 
 # 使用轮询方式
-# updater = Updater(TOKEN)
+# updater = Updater(token)
 # dispatcher = updater.dispatcher
 
 bot.setWebhook('https://{host}/{token}'.format(host=host, token=token))
@@ -86,9 +86,11 @@ def start(bot, update):
 
     button_list = [
         KeyboardButton(text="正在热映"),
-        KeyboardButton(text="电影搜索"),
         KeyboardButton(text="即将上映"),
+        KeyboardButton(text="电影搜索"),
+        KeyboardButton(text="演员搜索"),
         KeyboardButton(text="新片榜")
+
     ]
     reply_markup = ReplyKeyboardMarkup(util.build_menu(button_list, n_cols=2),
                                        resize_keyboard=True,
@@ -102,7 +104,7 @@ def start(bot, update):
 
 
 # “正在热映”功能，自定义的消息过滤方法，
-@command(MessageHandler, util.FilterNowplaying('正在热映'))
+@command(MessageHandler, util.CustomFilter('正在热映'))
 @send_typing_action
 def now_playing(bot, update):
     start_time = datetime.datetime.now()
@@ -111,14 +113,15 @@ def now_playing(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 获取电影列表')
 
-    movie_list = funcs.load()
+    movie_list, movie_id_list = funcs.load()
 
-    button_list = []
-    for i in movie_list:
-        button_list.append(InlineKeyboardButton(i['name'], callback_data=i['id']))
+    button_list = list()
+    range_len_movie_list = range(len(movie_list))
+    for i in range_len_movie_list:
+        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
     reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
     bot.send_message(chat_id=update.message.chat_id,
-                     text="以下是正在热映的电影，请点击按钮查看详情",
+                     text="以下是正在热映的电影，请点击按钮查看详情，稍后会生成影评关键词",
                      reply_markup=reply_markup)
 
     end_time = datetime.datetime.now()
@@ -126,7 +129,7 @@ def now_playing(bot, update):
 
 
 # “新片榜”功能，自定义的消息过滤方法，发送 InlineKeyboardButton
-@command(MessageHandler, util.FilterNowplaying('新片榜'))
+@command(MessageHandler, util.CustomFilter('新片榜'))
 @send_typing_action
 def coming(bot, update):
     start_time = datetime.datetime.now()
@@ -135,11 +138,11 @@ def coming(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 使用新片榜')
 
-    movie_list, id_list = funcs.new_movies()
+    movie_list, movie_id_list = funcs.new_movies()
     range_len_movie_list = range(len(movie_list))
-    button_list = []
+    button_list = list()
     for i in range_len_movie_list:
-        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=id_list[i]))
+        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
     reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
     bot.send_message(chat_id=update.message.chat_id,
                      text="以下是电影新片榜，请点击按钮查看详情",
@@ -150,7 +153,7 @@ def coming(bot, update):
 
 
 # “即将上映”功能，自定义的消息过滤方法，发送 InlineKeyboardButton
-@command(MessageHandler, util.FilterNowplaying('即将上映'))
+@command(MessageHandler, util.CustomFilter('即将上映'))
 @send_typing_action
 def coming(bot, update):
     start_time = datetime.datetime.now()
@@ -161,7 +164,7 @@ def coming(bot, update):
 
     movie_list, id_list = funcs.coming()
     range_len_movie_list = range(len(movie_list))
-    button_list = []
+    button_list = list()
     for i in range_len_movie_list:
         button_list.append(InlineKeyboardButton(movie_list[i], callback_data=id_list[i]))
     reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
@@ -173,8 +176,9 @@ def coming(bot, update):
     print("即将上映-执行时间:", end_time - start_time)
 
 
-# “即将上映”功能，使用默认的消息过滤方法，必须放最下面，否则位于本方法下方的代码数据返回不正确
-@command(MessageHandler, Filters.text)
+# “电影搜索”功能
+# @command(MessageHandler, Filters.text)
+@command(MessageHandler, util.CustomFilter('电影搜索'))
 @send_typing_action
 def movie_search(bot, update):
     start_time = datetime.datetime.now()
@@ -183,35 +187,69 @@ def movie_search(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 使用电影搜索')
 
-    movie_name = update.message.text
-    if movie_name == '电影搜索':
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="请输入电影名称")
-
-    if movie_name != '电影搜索':
+    try:
+        search_type, movie_name = update.message.text.split(' ', 1)
+        print(movie_name)
         movie_list, id_list = funcs.movie_search(movie_name)
-
         range_len_movie_list = range(len(movie_list))
-        button_list = []
+        button_list = list()
         for i in range_len_movie_list:
             button_list.append(InlineKeyboardButton(movie_list[i], callback_data=id_list[i]))
-
         reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
         bot.send_message(chat_id=update.message.chat_id,
                          text="请选择以下电影查看详情",
                          reply_markup=reply_markup)
+    except ValueError:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="请输入要搜索的电影\n"
+                              "搜索格式：电影搜索 电影名称(中间以空格分隔)\n"
+                              "例如：电影搜索 大黄蜂")
 
     end_time = datetime.datetime.now()
     print("电影搜索-执行时间:", end_time - start_time)
 
 
+# “演员搜索”功能
+# @command(MessageHandler, Filters.text)
+@command(MessageHandler, util.CustomFilter('演员搜索'))
+@send_typing_action
+def movie_search(bot, update):
+    start_time = datetime.datetime.now()
+
+    user_name = update.message.from_user.username
+    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
+          user_name + ' 使用演员搜索')
+
+    try:
+        search_type, actor_name = update.message.text.split(' ', 1)
+        actor_list, actor_id_list = funcs.actor_search(actor_name)
+        range_len_actor_list = range(len(actor_list))
+        button_list = list()
+        for i in range_len_actor_list:
+            print(actor_id_list[i])
+            print(type(actor_id_list[i]))
+            button_list.append(InlineKeyboardButton(actor_list[i], callback_data=actor_id_list[i]))
+        reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="请选择以下演员查看详情",
+                         reply_markup=reply_markup)
+    except ValueError:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="请输入要搜索的演员\n"
+                              "搜索格式：演员搜索 演员名称(中间以空格分隔)\n"
+                              "例如：演员搜索 姜文")
+
+    end_time = datetime.datetime.now()
+    print("演员搜索-执行时间:", end_time - start_time)
+
+
 # InlineKeyButton回调处理，生成电影详情
-@command(CallbackQueryHandler, pattern='[0-9]+')
+@command(CallbackQueryHandler, pattern=r'movie\s[0-9]+')
 @send_typing_action
 def movie_keyboard(bot, update):
     start_time = datetime.datetime.now()
 
-    id_ = update.callback_query.data
+    movie, id_ = update.callback_query.data.split()
     user_name = update.callback_query.from_user.username
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 查询电影，ID：' + id_)
@@ -219,44 +257,107 @@ def movie_keyboard(bot, update):
     movie_image_text, title_text, directors_text, score, countries, genres, actors_text, summary = funcs.movie_info(
         id_)
 
-    bot.send_message(chat_id=update.callback_query.message.chat_id,
-                     text="{movie_image}"
-                          "*电影名称*：{title}\n\n"
-                          "*导演*：{directors}\n"
-                          "*评分*：{score}\n"
-                          "*制片国家/地区*：{countries}\n"
-                          "*类型*：{genres}\n"
-                          "*主演*：{actors}\n"
-                          "*剧情简介*：{summary}\n".format(movie_image=movie_image_text,
-                                                      title=title_text,
-                                                      directors=directors_text,
-                                                      score=score,
-                                                      countries=countries,
-                                                      genres=genres,
-                                                      actors=actors_text,
-                                                      summary=summary),
-                     parse_mode=ParseMode.MARKDOWN)
+    bot.send_photo(chat_id=update.callback_query.message.chat_id,
+                   photo=movie_image_text,
+                   caption="*电影名称*：{title}\n\n"
+                           "*导演*：{directors}\n"
+                           "*评分*：{score}\n"
+                           "*制片国家/地区*：{countries}\n"
+                           "*类型*：{genres}\n"
+                           "*主演*：{actors}\n"
+                           "*剧情简介*：{summary}\n".format(title=title_text,
+                                                       directors=directors_text,
+                                                       score=score,
+                                                       countries=countries,
+                                                       genres=genres,
+                                                       actors=actors_text,
+                                                       summary=summary),
+                   parse_mode=ParseMode.MARKDOWN)
 
     if score != 0:
-        try:
-            bot.send_photo(chat_id=update.callback_query.message.chat_id,
-                           photo=open("./img/" + id_ + '.jpg', 'rb'))
-            print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "读取预缓存图片")
-        except FileNotFoundError:
-            print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
-                  '：电影ID：' + id_ + " 未缓存，正在请求URL获取评论")
-            msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
-                                      text="正在遍历该电影所有影评\n由于评论有几万条，请耐心等待").message_id
-
-            funcs.save_img(id_)
-            bot.send_photo(chat_id=update.callback_query.message.chat_id,
-                           photo=open("./img/" + id_ + '.jpg', 'rb'))
-            bot.delete_message(chat_id=update.callback_query.message.chat_id, message_id=msg_id)
-        finally:
-            bot.answer_callback_query(callback_query_id=update.callback_query.id)
+        reply_markup = InlineKeyboardMarkup(
+            util.build_menu([InlineKeyboardButton("生成影评词云", callback_data='comment_wordcloud ' + id_)],
+                            n_cols=1))
+        bot.send_message(chat_id=update.callback_query.message.chat_id,
+                         text="是否生成影评词云？",
+                         reply_markup=reply_markup)
 
     end_time = datetime.datetime.now()
     print("电影详情-执行时间:", end_time - start_time)
+
+
+# InlineKeyButton回调处理，生成影评词云
+@command(CallbackQueryHandler, pattern=r'comment_wordcloud\s[0-9]+')
+@send_typing_action
+def comment_wordcloud(bot, update):
+    start_time = datetime.datetime.now()
+
+    *_, id_ = update.callback_query.data.split()
+    user_name = update.callback_query.from_user.username
+    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
+          user_name + ' 生成影评词云，ID：' + id_)
+
+    try:
+        bot.send_photo(chat_id=update.callback_query.message.chat_id,
+                       photo=open("./img/" + id_ + '.jpg', 'rb'))
+        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "读取预缓存图片")
+    except FileNotFoundError:
+        bot.answer_callback_query(callback_query_id=update.callback_query.id,
+                                  text='正在生成影评关键词，请稍后')
+        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
+              '：电影ID：' + id_ + " 未缓存，正在请求URL获取评论")
+        funcs.save_img(id_)
+        bot.send_photo(chat_id=update.callback_query.message.chat_id,
+                       photo=open("./img/" + id_ + '.jpg', 'rb'))
+
+    end_time = datetime.datetime.now()
+    print("生成影评词云-执行时间:", end_time - start_time)
+
+
+# InlineKeyButton回调处理，生成演员详情
+@command(CallbackQueryHandler, pattern=r'actor\s[0-9]+')
+@send_typing_action
+def movie_keyboard(bot, update):
+    start_time = datetime.datetime.now()
+
+    actor, id_ = update.callback_query.data.split()
+    user_name = update.callback_query.from_user.username
+    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
+          user_name + ' 查询演员，ID：' + id_)
+
+    actor_pic_url, man_html, sex, sign, birthday, birthplace, profession, more_foreign_name, more_chinese_name, families_html, imdb_nm_html, website_html = funcs.actor_info(
+        id_)
+
+    bot.send_photo(chat_id=update.callback_query.message.chat_id,
+                   photo=actor_pic_url,
+                   caption="姓名：{man_html}\n"
+                           "性别：{sex}\n"
+                           "星座：{sign}\n"
+                           "出生日期：{birthday}\n"
+                           "出生地：{birthplace}\n"
+                           "职业：{profession}\n"
+                           "更多外文名：{more_foreign_name}\n"
+                           "更多中文名：{more_chinese_name}\n"
+                           "家庭成员：{families_html}\n"
+                           "imdb编号：{imdb_nm_html}\n"
+                           "官方网站：{website_html}\n".format(man_html=man_html,
+                                                          sex=sex,
+                                                          sign=sign,
+                                                          birthday=birthday,
+                                                          birthplace=birthplace,
+                                                          profession=profession,
+                                                          more_foreign_name=more_foreign_name,
+                                                          more_chinese_name=more_chinese_name,
+                                                          families_html=families_html,
+                                                          imdb_nm_html=imdb_nm_html,
+                                                          website_html=website_html),
+                   parse_mode=ParseMode.HTML)
+
+    bot.answer_callback_query(callback_query_id=update.callback_query.id,
+                              text='占位')
+
+    end_time = datetime.datetime.now()
+    print("演员信息-执行时间:", end_time - start_time)
 
 
 if __name__ == '__main__':
@@ -267,8 +368,7 @@ if __name__ == '__main__':
 
     # webhook 方式
     app.run(host='127.0.0.1',
-            port=8443,
-            debug=True)
+            port=8443)
 
     # 预缓存，默认不开启
     # util.background()

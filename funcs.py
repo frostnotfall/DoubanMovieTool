@@ -26,14 +26,12 @@ def load():
     nowplaying = soup.find('div', id='nowplaying')
     nowplaying_list = nowplaying.find_all('li', class_='list-item')
 
-    movie_list = []
+    movie_list = list()
+    movie_id_list = list()
     for item in nowplaying_list:
-        movie_dict = dict()
-        movie_dict['id'] = item['data-subject']
-        for tag_img_item in item.find_all('img'):
-            movie_dict['name'] = item['data-title']
-            movie_list.append(movie_dict)
-    return movie_list
+        movie_id_list.append('movie ' + item['data-subject'])
+        movie_list.append(item['data-title'])
+    return movie_list, movie_id_list
 
 
 def coming():
@@ -60,15 +58,15 @@ def new_movies():
 
     soup = BeautifulSoup(html_data, 'lxml')
     movie_list = list()
-    id_list = list()
+    movie_id_list = list()
     for i in soup.find_all('a', class_='nbg'):
         movie_name = i['title']
         movie_url = i.get('href').strip("//")
         movie_id = re.search(r"\d+", movie_url).group()
         movie_list.append(movie_name)
-        id_list.append(movie_id)
+        movie_id_list.append('movie ' + movie_id)
 
-    return movie_list, id_list
+    return movie_list, movie_id_list
 
 
 def movie_search(movie_name):
@@ -78,20 +76,39 @@ def movie_search(movie_name):
 
     subjects = json_data['subjects']
     movie_list = list()
-    id_list = list()
+    movie_id_list = list()
     range_len_subjects = range(len(subjects))
     for i in range_len_subjects:
         movie_list.append(subjects[i]['title'])
-        id_list.append(subjects[i]['id'])
+        movie_id_list.append('movie ' + subjects[i]['id'])
 
-    return movie_list, id_list
+    return movie_list, movie_id_list
+
+
+def actor_search(actor_name):
+    with util.my_opener().open('https://movie.douban.com/celebrities/search?search_text={}'.format(
+            parse.quote(actor_name))) as html_res:
+        html_data = html_res.read().decode('UTF-8')
+
+    soup = BeautifulSoup(html_data, 'lxml')
+    actor_list = list()
+    actor_id_list = list()
+    search_result = soup.find_all('h3')
+    for each_result in search_result:
+        actor_name = each_result.string
+        actor_url = each_result.find('a').get('href')
+        actor_id = re.search(r"\d+", actor_url).group()
+        actor_list.append(actor_name)
+        actor_id_list.append('actor ' + actor_id)
+
+    return actor_list, actor_id_list
 
 
 def movie_info(id_):
     with util.my_opener().open('https://api.douban.com/v2/movie/subject/' + str(id_)) as html_data:
         json_data = json.load(html_data)
 
-        movie_image_text = '[.](' + json_data['images']['small'] + ')'
+        movie_image_text = json_data['images']['small']
 
         title_text = '[' + json_data['title'] + '](https://movie.douban.com/subject/' + str(
             id_) + '/?from=playing_poster)'
@@ -130,6 +147,56 @@ def movie_info(id_):
         summary = json_data['summary']
 
     return movie_image_text, title_text, directors_text, score, countries, genres, actors_text, summary
+
+
+def actor_info(id_):
+    with util.my_opener().open('https://movie.douban.com/celebrity/{id}/'.format(id=id_)) as html_res:
+        html_data = html_res.read().decode('UTF-8')
+
+        soup = BeautifulSoup(html_data, 'lxml')
+        headline = soup.find('div', id='headline', class_="item")
+        actor_name = headline.find('div', class_="pic").find('a', class_="nbg").get('title')
+        actor_pic_url = headline.find('div', class_="pic").find('a', class_="nbg").get('href')
+
+        actor_html = '<a href="https://movie.douban.com/celebrity/{id}/">{actor_name}</a>'.format(
+            actor_name=actor_name, id=id_)
+
+        actor_info_dict = {'sex': None, 'sign': None, 'birthday': None, 'birthplace': None,
+                           'profession': None,
+                           'more_foreign_name': None, 'more_chinese_name': None, 'families_html': None,
+                           'imdb_nm_html': None, 'website_html': None}
+
+        for ul_li in headline.find('ul').find_all('li'):
+            span = ul_li.find('span')
+            if str(span.string) == '性别':
+                actor_info_dict['sex'] = span.next_sibling.strip(':').strip()
+            if str(span.string) == '星座':
+                actor_info_dict['sign'] = span.next_sibling.strip(':').strip()
+            if str(span.string) == '出生日期':
+                actor_info_dict['birthday'] = span.next_sibling.strip(':').strip()
+            if str(span.string) == '出生地':
+                actor_info_dict['birthplace'] = span.next_sibling.strip(':').strip()
+            if str(span.string) == '职业':
+                actor_info_dict['profession'] = span.next_sibling.strip(':').strip()
+            if str(span.string) == '更多外文名':
+                actor_info_dict['more_foreign_name'] = span.next_sibling.strip(':').strip()
+            if str(span.string) == '更多中文名':
+                actor_info_dict['more_chinese_name'] = span.next_sibling.strip(':').strip()
+
+        sex = actor_info_dict['sex'] if actor_info_dict['sex'] else '无'
+        sign = actor_info_dict['sign'] if actor_info_dict['sign'] else '无'
+        birthday = actor_info_dict['birthday'] if actor_info_dict['birthday'] else '无'
+        birthplace = actor_info_dict['birthplace'] if actor_info_dict['birthplace'] else '无'
+        profession = actor_info_dict['profession'] if actor_info_dict['profession'] else '无'
+        more_foreign_name = actor_info_dict['more_foreign_name'] if actor_info_dict[
+            'more_foreign_name'] else '无'
+        more_chinese_name = actor_info_dict['more_chinese_name'] if actor_info_dict[
+            'more_chinese_name'] else '无'
+        families_html = actor_info_dict['families_html'] if actor_info_dict['families_html'] else '无'
+        imdb_nm_html = actor_info_dict['imdb_nm_html'] if actor_info_dict['imdb_nm_html'] else '无'
+        website_html = actor_info_dict['website_html'] if actor_info_dict['website_html'] else '无'
+
+    return actor_pic_url, actor_html, sex, sign, birthday, birthplace, profession, more_foreign_name, more_chinese_name, families_html, imdb_nm_html, website_html
 
 
 def get_comments(id_):
@@ -204,8 +271,6 @@ def save_img(id_):
         temp = (key, word_frequency[key])
         word_frequency_list.append(temp)
 
-    # mpl.rcParams['figure.figsize'] = (5.0, 2.5)
-
     try:
         wordcloud = wordcloud.fit_words(dict(word_frequency_list))
     except ValueError:
@@ -213,12 +278,3 @@ def save_img(id_):
               '：' + "电影ID：" + id_ + " 获取评论失败")
         return
     wordcloud.to_file("./img/" + id_ + ".jpg")
-
-    # plt.imshow(wordcloud)
-    # plt.xticks([])
-    # plt.yticks([])
-    # plt.gca().xaxis.set_major_locator(plt.NullLocator())
-    # plt.gca().yaxis.set_major_locator(plt.NullLocator())
-    # plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-    # plt.margins(0, 0)
-    # plt.savefig("./img/" + id_ + ".jpg", transparent=True, dpi=300, pad_inches=0, bbox_inches='tight')
