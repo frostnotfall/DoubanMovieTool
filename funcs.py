@@ -28,9 +28,11 @@ def load():
 
     movie_list = list()
     movie_id_list = list()
+
     for item in nowplaying_list:
         movie_id_list.append('movie ' + item['data-subject'])
         movie_list.append(item['data-title'])
+
     return movie_list, movie_id_list
 
 
@@ -41,15 +43,16 @@ def coming():
     soup = BeautifulSoup(html_data, 'lxml')
     coming_list = soup.find('table', class_="coming_list").find('tbody')
     movie_list = list()
-    id_list = list()
+    movie_id_list = list()
+
     for i in coming_list.find_all('a'):
         movie_name = i.text
         movie_url = i.get('href').strip("//")
         movie_id = re.search(r"\d+", movie_url).group()
         movie_list.append(movie_name)
-        id_list.append(movie_id)
+        movie_id_list.append('movie ' + movie_id)
 
-    return movie_list, id_list
+    return movie_list, movie_id_list
 
 
 def new_movies():
@@ -59,6 +62,7 @@ def new_movies():
     soup = BeautifulSoup(html_data, 'lxml')
     movie_list = list()
     movie_id_list = list()
+
     for i in soup.find_all('a', class_='nbg'):
         movie_name = i['title']
         movie_url = i.get('href').strip("//")
@@ -78,6 +82,7 @@ def movie_search(movie_name):
     movie_list = list()
     movie_id_list = list()
     range_len_subjects = range(len(subjects))
+
     for i in range_len_subjects:
         movie_list.append(subjects[i]['title'])
         movie_id_list.append('movie ' + subjects[i]['id'])
@@ -94,6 +99,7 @@ def actor_search(actor_name):
     actor_list = list()
     actor_id_list = list()
     search_result = soup.find_all('h3')
+
     for each_result in search_result:
         actor_name = each_result.string
         actor_url = each_result.find('a').get('href')
@@ -115,12 +121,15 @@ def movie_info(id_):
 
         try:
             directors_text_list = list()
+
             for director_info in json_data['directors']:
                 directors_text_list.append(
                     '[' + director_info['name'] + '](https://movie.douban.com/celebrity/' +
                     director_info[
                         'id'] + '/)')
+
             directors_text = '，'.join(directors_text_list)
+
         except TypeError:
             directors_text = '无'
 
@@ -136,11 +145,14 @@ def movie_info(id_):
 
         try:
             actors_text_list = list()
+
             for actor_info in json_data['casts']:
                 actors_text_list.append(
                     '[' + actor_info['name'] + '](https://movie.douban.com/celebrity/' + actor_info[
                         'id'] + '/)')
+
             actors_text = '，'.join(actors_text_list)
+
         except TypeError:
             actors_text = '无'
 

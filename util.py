@@ -5,12 +5,13 @@
 import datetime
 import os
 import random
-import re
 import threading
+import time
 from http import cookiejar
 from urllib import request
+import requests
+import re
 
-import time
 from telegram.ext import (BaseFilter)
 
 import funcs
@@ -44,6 +45,7 @@ def save_cookie():
     cookie = cookiejar.MozillaCookieJar(filename)
     opener = request.build_opener(request.HTTPCookieProcessor(cookie))
     header = []
+
     for key, value in head.items():
         elem = (key, value)
         header.append(elem)
@@ -59,6 +61,7 @@ def my_opener():
 
     opener = request.build_opener(request.HTTPCookieProcessor(cookie))
     header = []
+
     for key, value in head.items():
         elem = (key, value)
         header.append(elem)
@@ -100,6 +103,7 @@ def build_menu(buttons,
                header_buttons=None,
                footer_buttons=None):
     menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
+
     if header_buttons:
         menu.insert(0, header_buttons)
     if footer_buttons:
@@ -107,24 +111,32 @@ def build_menu(buttons,
     return menu
 
 
-# 预缓存
+# 预缓存 - 正在热映
 def preload():
-    movie_list = funcs.load()
-    for i in movie_list:
-        if os.path.exists(os.getcwd() + "./img/" + i['id'] + '.jpg') is False:
-            print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
-                  '：' + "预缓存，电影ID：" + i['id'])
-            funcs.save_img(i['id'])
-            time.sleep(60)
+    def preload_img():
+        movie_list, *_ = funcs.load()
+        for i in movie_list:
+            if os.path.exists(os.getcwd() + "./img/" + i['id'] + '.jpg') is False:
+                print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
+                      '：' + "预缓存，电影ID：" + i['id'])
+                funcs.save_img(i['id'])
+                time.sleep(60)
 
-
-def background():
     time.sleep(600)
-    t = threading.Thread(target=preload)
-    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "开始执行预缓存")
+    t = threading.Thread(target=preload_img)
+    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "周期性任务 - 预缓存")
+    t.setDaemon(True)
     t.start()
-    t.join()
-    time.sleep(21600)
-    for item in os.listdir(os.getcwd() + "/img"):
-        os.remove(os.path.join(os.getcwd() + "/img", item))
-    background()
+
+
+def removal():
+    def remove_img():
+        time.sleep(21600)
+        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "周期性任务 - 清除词云图片")
+        for item in os.listdir(os.getcwd() + "/img"):
+            os.remove(os.path.join(os.getcwd() + "/img", item))
+
+    s = threading.Thread(target=remove_img)
+    s.setDaemon(True)
+    s.start()
+

@@ -141,9 +141,11 @@ def coming(bot, update):
     movie_list, movie_id_list = funcs.new_movies()
     range_len_movie_list = range(len(movie_list))
     button_list = list()
+
     for i in range_len_movie_list:
         button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
     reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
+
     bot.send_message(chat_id=update.message.chat_id,
                      text="以下是电影新片榜，请点击按钮查看详情",
                      reply_markup=reply_markup)
@@ -162,12 +164,14 @@ def coming(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 使用即将上映')
 
-    movie_list, id_list = funcs.coming()
+    movie_list, movie_id_list = funcs.coming()
     range_len_movie_list = range(len(movie_list))
     button_list = list()
+
     for i in range_len_movie_list:
-        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=id_list[i]))
+        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
     reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
+
     bot.send_message(chat_id=update.message.chat_id,
                      text="以下是即将上映的电影，请点击按钮查看详情",
                      reply_markup=reply_markup)
@@ -189,13 +193,14 @@ def movie_search(bot, update):
 
     try:
         search_type, movie_name = update.message.text.split(' ', 1)
-        print(movie_name)
         movie_list, id_list = funcs.movie_search(movie_name)
         range_len_movie_list = range(len(movie_list))
         button_list = list()
+
         for i in range_len_movie_list:
             button_list.append(InlineKeyboardButton(movie_list[i], callback_data=id_list[i]))
         reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
+
         bot.send_message(chat_id=update.message.chat_id,
                          text="请选择以下电影查看详情",
                          reply_markup=reply_markup)
@@ -225,11 +230,11 @@ def movie_search(bot, update):
         actor_list, actor_id_list = funcs.actor_search(actor_name)
         range_len_actor_list = range(len(actor_list))
         button_list = list()
+
         for i in range_len_actor_list:
-            print(actor_id_list[i])
-            print(type(actor_id_list[i]))
             button_list.append(InlineKeyboardButton(actor_list[i], callback_data=actor_id_list[i]))
         reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=2))
+
         bot.send_message(chat_id=update.message.chat_id,
                          text="请选择以下演员查看详情",
                          reply_markup=reply_markup)
@@ -248,6 +253,9 @@ def movie_search(bot, update):
 @send_typing_action
 def movie_keyboard(bot, update):
     start_time = datetime.datetime.now()
+
+    bot.answer_callback_query(callback_query_id=update.callback_query.id,
+                              text="正在获取该电影的详细内容，请稍后")
 
     movie, id_ = update.callback_query.data.split()
     user_name = update.callback_query.from_user.username
@@ -273,6 +281,8 @@ def movie_keyboard(bot, update):
                                                        actors=actors_text,
                                                        summary=summary),
                    parse_mode=ParseMode.MARKDOWN)
+
+    bot.answer_callback_query(callback_query_id=update.callback_query.id)
 
     if score != 0:
         reply_markup = InlineKeyboardMarkup(
@@ -301,15 +311,20 @@ def comment_wordcloud(bot, update):
         bot.send_photo(chat_id=update.callback_query.message.chat_id,
                        photo=open("./img/" + id_ + '.jpg', 'rb'))
         print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "读取预缓存图片")
+
     except FileNotFoundError:
         bot.answer_callback_query(callback_query_id=update.callback_query.id,
                                   text='正在生成影评关键词，请稍后')
+
         print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
               '：电影ID：' + id_ + " 未缓存，正在请求URL获取评论")
+
         funcs.save_img(id_)
         bot.send_photo(chat_id=update.callback_query.message.chat_id,
                        photo=open("./img/" + id_ + '.jpg', 'rb'))
 
+    finally:
+        bot.answer_callback_query(callback_query_id=update.callback_query.id)
     end_time = datetime.datetime.now()
     print("生成影评词云-执行时间:", end_time - start_time)
 
@@ -320,8 +335,12 @@ def comment_wordcloud(bot, update):
 def movie_keyboard(bot, update):
     start_time = datetime.datetime.now()
 
+    bot.answer_callback_query(callback_query_id=update.callback_query.id,
+                              text='正在获取该演员的详细内容，请稍后')
+
     actor, id_ = update.callback_query.data.split()
     user_name = update.callback_query.from_user.username
+
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 查询演员，ID：' + id_)
 
@@ -353,8 +372,7 @@ def movie_keyboard(bot, update):
                                                           website_html=website_html),
                    parse_mode=ParseMode.HTML)
 
-    bot.answer_callback_query(callback_query_id=update.callback_query.id,
-                              text='占位')
+    bot.answer_callback_query(callback_query_id=update.callback_query.id)
 
     end_time = datetime.datetime.now()
     print("演员信息-执行时间:", end_time - start_time)
@@ -362,6 +380,8 @@ def movie_keyboard(bot, update):
 
 if __name__ == '__main__':
     util.save_cookie()
+    # 定时清除词云图片
+    util.removal()
 
     # 轮询方式
     # updater.start_polling()
@@ -370,5 +390,5 @@ if __name__ == '__main__':
     app.run(host='127.0.0.1',
             port=8443)
 
-    # 预缓存，默认不开启
-    # util.background()
+    # 预缓存正在热映中的电影的影评词云图片，默认不开启
+    # util.preload()
