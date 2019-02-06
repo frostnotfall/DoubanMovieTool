@@ -15,14 +15,15 @@ import logging
 from functools import wraps
 
 from flask import Flask, request
-from telegram import (Bot, ChatAction, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
-                      ParseMode, ReplyKeyboardMarkup, Update)
-from telegram.ext import (Dispatcher, CallbackQueryHandler, CommandHandler, MessageHandler,
-                          Updater)
+from telegram import (Bot, ChatAction, InlineKeyboardButton, InlineKeyboardMarkup,
+                      InlineQueryResultArticle, InputTextMessageContent, KeyboardButton, ParseMode,
+                      ReplyKeyboardMarkup, Update, TelegramError)
+from telegram.ext import (CallbackQueryHandler, CommandHandler, Dispatcher, InlineQueryHandler,
+                          Updater, MessageHandler, ChosenInlineResultHandler)
 
 import funcs
 import util
-from config import token, host
+from config import host, token
 
 # 使用 webhook 方式
 app = Flask(__name__)
@@ -87,10 +88,9 @@ def start(bot, update):
     button_list = [
         KeyboardButton(text="正在热映"),
         KeyboardButton(text="即将上映"),
-        KeyboardButton(text="电影搜索"),
-        KeyboardButton(text="演员搜索"),
-        KeyboardButton(text="新片榜")
-
+        KeyboardButton(text="新片榜"),
+        KeyboardButton(text="快捷搜索"),
+        KeyboardButton(text="其它搜索方式"),
     ]
     reply_markup = ReplyKeyboardMarkup(util.build_menu(button_list, n_cols=2),
                                        resize_keyboard=True,
@@ -180,8 +180,44 @@ def coming(bot, update):
     print("即将上映-执行时间:", end_time - start_time)
 
 
+# “快捷搜索”功能
+@command(MessageHandler, util.CustomFilter('快捷搜索'))
+@send_typing_action
+def shortcut_search(bot, update):
+    start_time = datetime.datetime.now()
+
+    user_name = update.message.from_user.username
+    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
+          user_name + ' 使用快捷搜索')
+
+    button_list = list()
+    button_list.append(InlineKeyboardButton('开始搜索',
+                                            switch_inline_query_current_chat=''))
+
+    reply_markup = InlineKeyboardMarkup(util.build_menu(button_list, n_cols=1))
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="点击以下按钮，然后输入要搜索的电影、演员或导演",
+                     reply_markup=reply_markup)
+
+    end_time = datetime.datetime.now()
+    print("快捷搜索-执行时间:", end_time - start_time)
+
+
+# “其它搜索方式”功能，自定义的消息过滤方法
+@command(MessageHandler, util.CustomFilter('其它搜索方式'))
+@send_typing_action
+def other_search(bot, update):
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="请输入要搜索的电影或演员\n"
+                          "搜索格式：电影|演员搜索 电影|演员名称(中间以空格分隔)\n"
+                          "例如，搜索电影：\n"
+                          "`电影搜索 变形金刚`\n"
+                          "搜索演员：\n"
+                          "`演员搜索 姜文`",
+                     parse_mode=ParseMode.MARKDOWN)
+
+
 # “电影搜索”功能
-# @command(MessageHandler, Filters.text)
 @command(MessageHandler, util.CustomFilter('电影搜索'))
 @send_typing_action
 def movie_search(bot, update):
@@ -215,10 +251,9 @@ def movie_search(bot, update):
 
 
 # “演员搜索”功能
-# @command(MessageHandler, Filters.text)
 @command(MessageHandler, util.CustomFilter('演员搜索'))
 @send_typing_action
-def movie_search(bot, update):
+def actor_search(bot, update):
     start_time = datetime.datetime.now()
 
     user_name = update.message.from_user.username
@@ -262,35 +297,33 @@ def movie_keyboard(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 查询电影，ID：' + id_)
 
-    movie_image_text, title_text, directors_text, score, countries, genres, actors_text, summary = funcs.movie_info(
-        id_)
+    movie_info_dict = funcs.movie_info(id_)
 
-    bot.send_photo(chat_id=update.callback_query.message.chat_id,
-                   photo=movie_image_text,
-                   caption="*电影名称*：{title}\n\n"
-                           "*导演*：{directors}\n"
-                           "*评分*：{score}\n"
-                           "*制片国家/地区*：{countries}\n"
-                           "*类型*：{genres}\n"
-                           "*主演*：{actors}\n"
-                           "*剧情简介*：{summary}\n".format(title=title_text,
-                                                       directors=directors_text,
-                                                       score=score,
-                                                       countries=countries,
-                                                       genres=genres,
-                                                       actors=actors_text,
-                                                       summary=summary),
-                   parse_mode=ParseMode.MARKDOWN)
+    try:
+        bot.send_photo(chat_id=update.callback_query.message.chat_id,
+                       photo=movie_info_dict['movie_image_text'],
+                       caption="{title}\n\n"
+                               "*导演*：{directors}\n"
+                               "*评分*：{score}\n"
+                               "*制片国家/地区*：{countries}\n"
+                               "*类型*：{genres}\n"
+                               "*主演*：{actors}\n"
+                               "*剧情简介*：{summary}\n".format(title=movie_info_dict['title_text'],
+                                                           directors=movie_info_dict['directors_text'],
+                                                           score=movie_info_dict['score'],
+                                                           countries=movie_info_dict['countries'],
+                                                           genres=movie_info_dict['genres'],
+                                                           actors=movie_info_dict['actors_text'],
+                                                           summary=movie_info_dict['summary']),
+                       parse_mode=ParseMode.MARKDOWN,
+                       reply_markup=InlineKeyboardMarkup(util.build_menu(
+                           [InlineKeyboardButton("生成影评词云", callback_data='comment_wordcloud ' + id_)],
+                           n_cols=1)) if movie_info_dict['score'] != 0 else None)
 
-    bot.answer_callback_query(callback_query_id=update.callback_query.id)
-
-    if score != 0:
-        reply_markup = InlineKeyboardMarkup(
-            util.build_menu([InlineKeyboardButton("生成影评词云", callback_data='comment_wordcloud ' + id_)],
-                            n_cols=1))
+    except TelegramError:
         bot.send_message(chat_id=update.callback_query.message.chat_id,
-                         text="是否生成影评词云？",
-                         reply_markup=reply_markup)
+                         text="该影片存在限制，请直接查看原网页\n" + movie_info_dict['title_text'],
+                         parse_mode=ParseMode.MARKDOWN)
 
     end_time = datetime.datetime.now()
     print("电影详情-执行时间:", end_time - start_time)
@@ -308,9 +341,10 @@ def comment_wordcloud(bot, update):
           user_name + ' 生成影评词云，ID：' + id_)
 
     try:
+        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "读取预缓存图片")
         bot.send_photo(chat_id=update.callback_query.message.chat_id,
                        photo=open("./img/" + id_ + '.jpg', 'rb'))
-        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "读取预缓存图片")
+        bot.answer_callback_query(callback_query_id=update.callback_query.id)
 
     except FileNotFoundError:
         bot.answer_callback_query(callback_query_id=update.callback_query.id,
@@ -323,8 +357,6 @@ def comment_wordcloud(bot, update):
         bot.send_photo(chat_id=update.callback_query.message.chat_id,
                        photo=open("./img/" + id_ + '.jpg', 'rb'))
 
-    finally:
-        bot.answer_callback_query(callback_query_id=update.callback_query.id)
     end_time = datetime.datetime.now()
     print("生成影评词云-执行时间:", end_time - start_time)
 
@@ -332,7 +364,7 @@ def comment_wordcloud(bot, update):
 # InlineKeyButton回调处理，生成演员详情
 @command(CallbackQueryHandler, pattern=r'actor\s[0-9]+')
 @send_typing_action
-def movie_keyboard(bot, update):
+def actor_keyboard(bot, update):
     start_time = datetime.datetime.now()
 
     bot.answer_callback_query(callback_query_id=update.callback_query.id,
@@ -344,12 +376,12 @@ def movie_keyboard(bot, update):
     print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
           user_name + ' 查询演员，ID：' + id_)
 
-    actor_pic_url, man_html, sex, sign, birthday, birthplace, profession, more_foreign_name, more_chinese_name, families_html, imdb_nm_html, website_html = funcs.actor_info(
-        id_)
+    actor_info_dict = funcs.actor_info(id_)
 
+    # FIXME: caption maybe too long.
     bot.send_photo(chat_id=update.callback_query.message.chat_id,
-                   photo=actor_pic_url,
-                   caption="姓名：{man_html}\n"
+                   photo=actor_info_dict['actor_pic_url'],
+                   caption="{man_html}\n\n"
                            "性别：{sex}\n"
                            "星座：{sign}\n"
                            "出生日期：{birthday}\n"
@@ -359,27 +391,135 @@ def movie_keyboard(bot, update):
                            "更多中文名：{more_chinese_name}\n"
                            "家庭成员：{families_html}\n"
                            "imdb编号：{imdb_nm_html}\n"
-                           "官方网站：{website_html}\n".format(man_html=man_html,
-                                                          sex=sex,
-                                                          sign=sign,
-                                                          birthday=birthday,
-                                                          birthplace=birthplace,
-                                                          profession=profession,
-                                                          more_foreign_name=more_foreign_name,
-                                                          more_chinese_name=more_chinese_name,
-                                                          families_html=families_html,
-                                                          imdb_nm_html=imdb_nm_html,
-                                                          website_html=website_html),
+                           "官方网站：{website_html}\n"
+                           "人物简介：{summary}\n".format(man_html=actor_info_dict['actor_html'],
+                                                     sex=actor_info_dict['sex'],
+                                                     sign=actor_info_dict['sign'],
+                                                     birthday=actor_info_dict['birthday'],
+                                                     birthplace=actor_info_dict['birthplace'],
+                                                     profession=actor_info_dict['profession'],
+                                                     more_foreign_name=actor_info_dict[
+                                                         'more_foreign_name'],
+                                                     more_chinese_name=actor_info_dict[
+                                                         'more_chinese_name'],
+                                                     families_html=actor_info_dict['families_html'],
+                                                     imdb_nm_html=actor_info_dict['imdb_nm_html'],
+                                                     website_html=actor_info_dict['website_html'],
+                                                     summary=actor_info_dict['summary']),
                    parse_mode=ParseMode.HTML)
-
-    bot.answer_callback_query(callback_query_id=update.callback_query.id)
 
     end_time = datetime.datetime.now()
     print("演员信息-执行时间:", end_time - start_time)
 
 
+# Inline mode回调处理，生成Inline详情
+@command(ChosenInlineResultHandler)
+def inline_info(bot, update):
+    start_time = datetime.datetime.now()
+
+    callback_type, id_ = update.chosen_inline_result.result_id.split()
+    user_name = update.chosen_inline_result.from_user.username
+
+    if callback_type == 'movie':
+        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
+              user_name + ' 查询电影，ID：' + id_)
+
+        movie_info_dict = funcs.movie_info(id_)
+        try:
+            bot.send_photo(chat_id=update.chosen_inline_result.from_user.id,
+                           photo=movie_info_dict['movie_image_text'],
+                           caption="{title}\n\n"
+                                   "*导演*：{directors}\n"
+                                   "*评分*：{score}\n"
+                                   "*制片国家/地区*：{countries}\n"
+                                   "*类型*：{genres}\n"
+                                   "*主演*：{actors}\n"
+                                   "*剧情简介*：{summary}\n".format(title=movie_info_dict['title_text'],
+                                                               directors=movie_info_dict['directors_text'],
+                                                               score=movie_info_dict['score'],
+                                                               countries=movie_info_dict['countries'],
+                                                               genres=movie_info_dict['genres'],
+                                                               actors=movie_info_dict['actors_text'],
+                                                               summary=movie_info_dict['summary']),
+                           parse_mode=ParseMode.MARKDOWN,
+                           reply_markup=InlineKeyboardMarkup(util.build_menu(
+                               [InlineKeyboardButton("生成影评词云",
+                                                     callback_data='comment_wordcloud ' + id_)],
+                               n_cols=1)) if movie_info_dict['score'] != 0 else None)
+
+        except TelegramError:
+            bot.send_message(chat_id=update.callback_query.message.chat_id,
+                             text="该影片存在限制，请直接查看原网页\n" + movie_info_dict['title_text'],
+                             parse_mode=ParseMode.MARKDOWN)
+
+    if callback_type == 'actor':
+        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
+              user_name + ' 查询演员，ID：' + id_)
+
+        actor_info_dict = funcs.actor_info(id_)
+
+        # FIXME: caption maybe too long.
+        bot.send_photo(chat_id=update.chosen_inline_result.from_user.id,
+                       photo=actor_info_dict['actor_pic_url'],
+                       caption="{man_html}\n\n"
+                               "性别：{sex}\n"
+                               "星座：{sign}\n"
+                               "出生日期：{birthday}\n"
+                               "出生地：{birthplace}\n"
+                               "职业：{profession}\n"
+                               "更多外文名：{more_foreign_name}\n"
+                               "更多中文名：{more_chinese_name}\n"
+                               "家庭成员：{families_html}\n"
+                               "imdb编号：{imdb_nm_html}\n"
+                               "官方网站：{website_html}\n"
+                               "人物简介：{summary}\n".format(man_html=actor_info_dict['actor_html'],
+                                                         sex=actor_info_dict['sex'],
+                                                         sign=actor_info_dict['sign'],
+                                                         birthday=actor_info_dict['birthday'],
+                                                         birthplace=actor_info_dict['birthplace'],
+                                                         profession=actor_info_dict['profession'],
+                                                         more_foreign_name=actor_info_dict[
+                                                             'more_foreign_name'],
+                                                         more_chinese_name=actor_info_dict[
+                                                             'more_chinese_name'],
+                                                         families_html=actor_info_dict[
+                                                             'families_html'],
+                                                         imdb_nm_html=actor_info_dict[
+                                                             'imdb_nm_html'],
+                                                         website_html=actor_info_dict[
+                                                             'website_html'],
+                                                         summary=actor_info_dict['summary']),
+                       parse_mode=ParseMode.HTML)
+
+    end_time = datetime.datetime.now()
+
+    print("Inline详情-执行时间:", end_time - start_time)
+
+
+@command(InlineQueryHandler)
+def inline_query(bot, update):
+    """Handle the inline query."""
+    name = update.inline_query.query
+    print(name)
+
+    suggest_result_list = funcs.subject_suggest(name)
+    results = list()
+    for suggest_result in suggest_result_list:
+        result = InlineQueryResultArticle(
+            id=suggest_result['type'] + ' ' + str(suggest_result['id']),
+            title=suggest_result['title'],
+            thumb_url=suggest_result['thumb_url'],
+            description=suggest_result['description'],
+            input_message_content=InputTextMessageContent(
+                suggest_result['title']))
+        results.append(result)
+
+    bot.answer_inline_query(update.inline_query.id, results)
+
+
 if __name__ == '__main__':
     util.save_cookie()
+
     # 定时清除词云图片
     util.removal()
 

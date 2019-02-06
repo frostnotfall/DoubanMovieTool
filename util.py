@@ -5,12 +5,11 @@
 import datetime
 import os
 import random
+import re
 import threading
 import time
 from http import cookiejar
 from urllib import request
-import requests
-import re
 
 from telegram.ext import (BaseFilter)
 
@@ -58,7 +57,6 @@ def save_cookie():
 def my_opener():
     cookie = cookiejar.MozillaCookieJar()
     cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
-
     opener = request.build_opener(request.HTTPCookieProcessor(cookie))
     header = []
 
@@ -66,6 +64,7 @@ def my_opener():
         elem = (key, value)
         header.append(elem)
     opener.add_headers = header
+
     return opener
 
 
@@ -92,7 +91,6 @@ class CustomFilter(BaseFilter):
         self.text = text
 
     def filter(self, message):
-        # return self.text in message.text
         if re.search(self.text, message.text):
             return True
 
@@ -139,4 +137,3 @@ def removal():
     s = threading.Thread(target=remove_img)
     s.setDaemon(True)
     s.start()
-
