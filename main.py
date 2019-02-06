@@ -131,7 +131,7 @@ def now_playing(bot, update):
 # “新片榜”功能，自定义的消息过滤方法，发送 InlineKeyboardButton
 @command(MessageHandler, util.CustomFilter('新片榜'))
 @send_typing_action
-def coming(bot, update):
+def chart(bot, update):
     start_time = datetime.datetime.now()
 
     user_name = update.message.from_user.username
