@@ -36,9 +36,12 @@ A telegram bot for douban movie
 截图
 ====
 * 功能
+
 ![功能](functions.jpg)
 * 正在热映
+
 ![正在热映](nowplaying.jpg)
 * 快捷搜索
+
 ![快捷搜索](shortcut_search.png)
 
