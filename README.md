@@ -33,6 +33,13 @@ A telegram bot for douban movie
   # app.run(host='127.0.0.1',
   #         port=8443)
 
+功能 or 特点
+====
+提供目前有“正在上映”、“即将上映”、“新片榜”‘“快捷搜索”等功能，
+还有一个基于旧接口实现的搜索（不太准，以后可能遗弃），
+通过CustomKeyboardButton、InlineKeyboardButton，InlineQuery，
+以及 Instant View 方式呈现输出。
+
 截图
 ====
 * 功能
@@ -44,4 +51,8 @@ A telegram bot for douban movie
 * 快捷搜索
 
 ![快捷搜索](shortcut_search.png)
+* Instant View
+
+![Instant View](InstantView.jpg)
+
 

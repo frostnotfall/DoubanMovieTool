@@ -7,3 +7,4 @@ wordcloud
 pandas
 lxml
 aiohttp
+aiograph

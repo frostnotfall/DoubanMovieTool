@@ -11,6 +11,7 @@ import aiohttp
 import jieba
 import numpy
 import pandas
+from aiograph import Telegraph
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
 
@@ -110,122 +111,154 @@ def actor_search(actor_name):
 
 
 def movie_info(id_):
-    with util.my_opener().open('https://api.douban.com/v2/movie/subject/' + str(id_)) as html_data:
-        json_data = json.load(html_data)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    telegraph = Telegraph()
 
-        movie_info_dict = dict()
+    async def main(id_):
+        await telegraph.create_account('DoubanMovieTool')
+        with util.my_opener().open('https://movie.douban.com/subject/{}/'.format(id_)) as html_res:
+            html_data = html_res.read().decode('UTF-8')
+        soup = BeautifulSoup(html_data, 'lxml')
 
-        movie_info_dict['movie_image_text'] = json_data['images']['small']
+        json_data = soup.find('script', type='application/ld+json').text
+        movie_dict = json.loads(json_data)
+        title = movie_dict['name']
+        image_html = '<img src="' + movie_dict['image'] + '">'
+        score = movie_dict['aggregateRating']['ratingValue']
+        score_html = '<strong>评分：{}</strong><br />'.format(score)
 
-        movie_info_dict['title_text'] = '[' + json_data[
-            'title'] + '](https://movie.douban.com/subject/' + str(id_) + '/?from=playing_poster)'
+        info = soup.find('div', id='info')
+        related_info = soup.find('div', class_='related-info')
+
+        directors_html = '<strong>导演：</strong>' + str(info.find_all('a', rel="v:directedBy")).strip(
+            '[|]') + '<br />'
+
+        author_html = '<strong>编剧：</strong>' + str(
+            info.find('span', text='编剧').next_sibling.next_sibling).replace('<span class="attrs">',
+                                                                            '').replace('</span>',
+                                                                                        '') + '<br />'
+
+        actors_html = '<strong>主演：</strong>' + str(info.find_all('a', rel="v:starring")).strip(
+            '[|]') + '<br />'
+
+        genre_set = set()
+        for genre in info.find_all('span', property="v:genre"):
+            genre_set.add(genre.text)
+        genre_html = '<strong>类型：</strong>' + ' / '.join(genre_set) + '<br/>'
+
+        country_html = '<strong>制片国家/地区：</strong>' + str(
+            info.find('span', text='制片国家/地区:').next_sibling).strip() + '<br />'
+
+        language_html = '<strong>语言：</strong>' + str(
+            info.find('span', text='语言:').next_sibling).strip() + '<br />'
+
+        publish_date_set = set()
+        for publish_date in info.find_all('span', property="v:initialReleaseDate"):
+            publish_date_set.add(publish_date.text)
+        publish_date_html = '<strong>上映日期：</strong>' + ' / '.join(publish_date_set) + '<br/>'
+
+        aka_html = '<strong>又名：</strong>' + str(
+            info.find('span', text='又名:').next_sibling).strip() + '<br />'
+
+        imdb_html = '<strong>IMDb链接：</strong>' + str(
+            info.find(href=re.compile(r"^http://www.imdb.com"))) + '<br />'
 
         try:
-            directors_text_list = list()
+            summary = related_info.find('span', class_="all hidden").text.strip().replace(' ', '')
+        except AttributeError:
+            summary = related_info.find('span', property="v:summary").text.strip().replace(' ', '')
 
-            for director_info in json_data['directors']:
-                directors_text_list.append(
-                    '[' + director_info['name'] + '](https://movie.douban.com/celebrity/' +
-                    director_info['id'] + '/)')
+        summary_html = '<h3>{}:</h3><p>{}</p>'.format(related_info.h2.i.text, summary)
 
-            movie_info_dict['directors_text'] = '，'.join(directors_text_list)
+        info_html = image_html + '<h3>电影信息</h3>' + score_html + directors_html + author_html + \
+                    actors_html + genre_html + country_html + language_html + publish_date_html + \
+                    aka_html + imdb_html
 
-        except TypeError:
-            pass
+        with util.my_opener().open(
+                'https://movie.douban.com/subject/{}/awards/'.format(id_)) as html_res:
+            html_data = html_res.read().decode('utf-8')
+        soup = BeautifulSoup(html_data, 'lxml')
+        content = soup.find('div', id='content')
 
-        movie_info_dict['score'] = json_data['rating']['average']
+        content_html = '<h3>{}：</h3>'.format(content.h1.text)
 
-        movie_info_dict['countries'] = json_data['countries']
-        if isinstance(movie_info_dict['countries'], list):
-            movie_info_dict['countries'] = '，'.join(movie_info_dict['countries'])
+        for awards in content.find_all('div', class_="awards"):
+            awards_div_h2 = awards.div.h2
+            awards_href = awards_div_h2.a.get('href')
+            awards_name = awards_div_h2.get_text().replace('\n', '')
+            awards_name_html = '<br/><em><a href="{href}">{name}</a></em><br/>'.format(
+                href=awards_href, name=awards_name)
+            awards_html = str(awards.find_all('ul')).strip('[|]').replace(
+                ', ', '').replace('<li></li>', '').replace('\n', '')
+            content_html = content_html + awards_name_html + awards_html
 
-        movie_info_dict['genres'] = json_data['genres']
-        if isinstance(movie_info_dict['genres'], list):
-            movie_info_dict['genres'] = '，'.join(movie_info_dict['genres'])
+        page = await telegraph.create_page(title, info_html + summary_html + content_html)
+        print('生成Instant View， URL:', page.url)
+        return page.url, score
 
-        try:
-            actors_text_list = list()
+    try:
+        url, score = loop.run_until_complete(main(id_))
+    finally:
+        loop.run_until_complete(telegraph.close())
 
-            for actor_info in json_data['casts']:
-                actors_text_list.append(
-                    '[' + actor_info['name'] + '](https://movie.douban.com/celebrity/' + actor_info[
-                        'id'] + '/)')
-
-            movie_info_dict['actors_text'] = '，'.join(actors_text_list)
-
-        except TypeError:
-            pass
-
-        movie_info_dict['summary'] = json_data['summary']
-
-    return movie_info_dict
+    return url, score
 
 
 def actor_info(id_):
-    with util.my_opener().open('https://movie.douban.com/celebrity/{id}/'.format(id=id_)) as html_res:
-        html_data = html_res.read().decode('UTF-8')
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    telegraph = Telegraph()
+
+    async def main():
+        await telegraph.create_account('DoubanMovieTool')
+        with util.my_opener().open(
+                'https://movie.douban.com/celebrity/{id}/'.format(id=id_)) as html_res:
+            html_data = html_res.read().decode('UTF-8')
 
         soup = BeautifulSoup(html_data, 'lxml')
         headline = soup.find('div', id='headline', class_="item")
-        actor_info_dict = {'actor_pic_url': '无',
-                           'actor_html': '无',
-                           'sex': '无',
-                           'sign': '无',
-                           'birthday': '无',
-                           'birthplace': '无',
-                           'profession': '无',
-                           'more_foreign_name': '无',
-                           'more_chinese_name': '无',
-                           'families_html': '无',
-                           'imdb_nm_html': '无',
-                           'website_html': '无',
-                           'summary': '无'}
         actor_name = headline.find('div', class_="pic").find('a', class_="nbg").get('title')
-        actor_info_dict['actor_pic_url'] = headline.find('div', class_="pic").find('a',
-                                                                                   class_="nbg").get(
-            'href')
+        image_url = headline.find('div', class_="pic").find('a', class_="nbg").get('href')
+        image_html = '<img src="{}">'.format(image_url)
 
-        actor_info_dict[
-            'actor_html'] = '<a href="https://movie.douban.com/celebrity/{id}/">{actor_name}</a>'.format(
-            actor_name=actor_name, id=id_)
+        ul = headline.find('ul', class_="")
+        ul_html = str(ul).replace('span', 'strong').replace('\n', '').replace('  ', '')
 
-        for ul_li in headline.find('ul').find_all('li'):
-            span = ul_li.find('span')
-            if str(span.string) == '性别':
-                actor_info_dict['sex'] = span.next_sibling.strip(':').strip()
-            if str(span.string) == '星座':
-                actor_info_dict['sign'] = span.next_sibling.strip(':').strip()
-            if str(span.string) == '出生日期':
-                actor_info_dict['birthday'] = span.next_sibling.strip(':').strip()
-            if str(span.string) == '出生地':
-                actor_info_dict['birthplace'] = span.next_sibling.strip(':').strip()
-            if str(span.string) == '职业':
-                actor_info_dict['profession'] = span.next_sibling.strip(':').strip()
-            if str(span.string) == '更多外文名':
-                actor_info_dict['more_foreign_name'] = span.next_sibling.strip(':').strip()
-            if str(span.string) == '更多中文名':
-                actor_info_dict['more_chinese_name'] = span.next_sibling.strip(':').strip()
+        info_html = image_html + '<h3>影人信息</h3>' + ul_html
 
-        for ul_li in headline.find('ul').find_all('li'):
-            span = ul_li.find('span')
-            if str(span.string) == '家庭成员':
-                [s.extract() for s in ul_li('span')]
-                actor_info_dict['families_html'] = str(ul_li.contents).strip('[|]').replace("'",
-                                                                                            "").replace(
-                    ",",
-                    "").replace(
-                    "\\n", "").strip().strip(':').strip()
-            if str(span.string) == 'imdb编号':
-                actor_info_dict['imdb_nm_html'] = str(ul_li('a')).strip('[|]')
-            if str(span.string) == '官方网站':
-                actor_info_dict['website_html'] = str(ul_li('a')).strip('[|]')
-
+        intro = soup.find('div', id="intro")
         try:
-            actor_info_dict['summary'] = soup.find('div', id="intro", class_="mod").find('span', class_="all hidden").text
+            summary = intro.find('span', class_="all hidden").text.strip().replace(' ', '')
         except AttributeError:
-            pass
+            summary = intro.find('div', class_="bd").text.strip().replace(' ', '')
 
-    return actor_info_dict
+        summary_html = '<h3>影人简介:</h3><p>{}</p>'.format(summary)
+
+        with util.my_opener().open(
+                'https://movie.douban.com/celebrity/{id}/awards/'.format(id=id_)) as html_res:
+            html_data = html_res.read().decode('utf-8')
+        soup = BeautifulSoup(html_data, 'lxml')
+        content = soup.find('div', id='content')
+
+        content_html = '<h3>{}</h3>'.format(content.h1.text)
+
+        for awards in content.find_all('div', class_="awards"):
+            awards_html = str(awards).replace('<div class="awards">', '').replace(
+                '<div class="hd">', '').replace('</div>', '').replace(
+                'h2', 'h4').replace('\n', '')
+            content_html = content_html + awards_html
+
+        page = await telegraph.create_page(actor_name, info_html + summary_html + content_html)
+        print('生成Instant View， URL:', page.url)
+        return page.url
+
+    try:
+        url = loop.run_until_complete(main())
+    finally:
+        loop.run_until_complete(telegraph.close())
+
+    return url
 
 
 def subject_suggest(name):
