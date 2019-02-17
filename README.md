@@ -1,7 +1,9 @@
 A telegram bot for douban movie
 ====
+> ## bot 地址：
+https://t.me/DoubanMovieBot
 > ## 一个tetegeam bot, 关于豆瓣电影的工具。
->
+
 * main.py 为主文件，funcs.py 为基本功能函数，util.py 为辅助模块，config.py中指定token(必须) 与 host(可选，webhook方式使用)。
 * 为防止被ban，默认未开启预缓存，如果有必要开启，在main.py中取消注释
   ```python
