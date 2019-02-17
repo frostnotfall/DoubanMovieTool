@@ -2,7 +2,9 @@
 # encoding: utf-8
 
 
+import asyncio
 import datetime
+import json
 import os
 import random
 import re
@@ -11,6 +13,7 @@ import time
 from http import cookiejar
 from urllib import request
 
+import aiohttp
 from telegram.ext import (BaseFilter)
 
 import funcs
@@ -66,6 +69,37 @@ def my_opener():
     opener.add_headers = header
 
     return opener
+
+
+def my_session():
+    async def main():
+        try:
+            with open('cookies.json', 'r', encoding="UTF-8") as f:
+                cookies = json.loads(f.read())
+            conn = aiohttp.TCPConnector()
+            session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
+                                            headers=head,
+                                            cookies=cookies,
+                                            connector=conn)
+        except (ValueError, FileNotFoundError):
+            async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
+                                             headers=head) as session:
+
+                async with session.get('https://movie.douban.com') as res:
+                    # cookies = dict()
+                    cookies = session.cookie_jar.filter_cookies('https://movie.douban.com')
+                    for key, cookie in res.cookies.items():
+                        cookies[cookie.key] = cookie.value
+                    with open('cookies.json', 'w') as f:
+                        json.dump(cookies, f)
+
+        return session
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    session = loop.run_until_complete(main())
+
+    return session
 
 
 class MyThread(threading.Thread):

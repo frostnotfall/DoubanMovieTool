@@ -75,7 +75,18 @@ def send_typing_action(func):
     return command_func
 
 
+def error(bot, update, error):
+    """Log Errors caused by Updates."""
+    print('webhook_info "%s" \n'
+          'Update "%s" \n'
+          'caused error "%s"\n',
+          bot.get_webhook_info,
+          update,
+          error)
+
+
 # 命令：/start，入口，发送 customKeyboardButton
+@dispatcher.run_async
 @command(CommandHandler, 'start')
 @send_typing_action
 def start(bot, update):
@@ -104,6 +115,7 @@ def start(bot, update):
 
 
 # “正在热映”功能，自定义的消息过滤方法，
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('正在热映'))
 @send_typing_action
 def now_playing(bot, update):
@@ -129,6 +141,7 @@ def now_playing(bot, update):
 
 
 # “新片榜”功能，自定义的消息过滤方法，发送 InlineKeyboardButton
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('新片榜'))
 @send_typing_action
 def chart(bot, update):
@@ -155,6 +168,7 @@ def chart(bot, update):
 
 
 # “即将上映”功能，自定义的消息过滤方法，发送 InlineKeyboardButton
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('即将上映'))
 @send_typing_action
 def coming(bot, update):
@@ -181,6 +195,7 @@ def coming(bot, update):
 
 
 # “快捷搜索”功能
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('快捷搜索'))
 @send_typing_action
 def shortcut_search(bot, update):
@@ -204,6 +219,7 @@ def shortcut_search(bot, update):
 
 
 # “其它搜索方式”功能，自定义的消息过滤方法
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('其它搜索方式'))
 @send_typing_action
 def other_search(bot, update):
@@ -218,6 +234,7 @@ def other_search(bot, update):
 
 
 # “电影搜索”功能
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('电影搜索'))
 @send_typing_action
 def movie_search(bot, update):
@@ -251,6 +268,7 @@ def movie_search(bot, update):
 
 
 # “演员搜索”功能
+@dispatcher.run_async
 @command(MessageHandler, util.CustomFilter('演员搜索'))
 @send_typing_action
 def actor_search(bot, update):
@@ -285,6 +303,7 @@ def actor_search(bot, update):
 
 
 # InlineKeyButton回调处理，生成电影详情
+@dispatcher.run_async
 @command(CallbackQueryHandler, pattern=r'movie\s[0-9]+')
 @send_typing_action
 def movie_keyboard(bot, update):
@@ -305,13 +324,14 @@ def movie_keyboard(bot, update):
                      reply_markup=InlineKeyboardMarkup(util.build_menu(
                          [InlineKeyboardButton("生成影评词云",
                                                callback_data='comment_wordcloud ' + id_)],
-                         n_cols=1)) if score != 0 else None)
+                         n_cols=1)) if score != '暂无评分' else None)
 
     end_time = datetime.datetime.now()
     print("电影详情-执行时间:", end_time - start_time)
 
 
 # InlineKeyButton回调处理，生成影评词云
+@dispatcher.run_async
 @command(CallbackQueryHandler, pattern=r'comment_wordcloud\s[0-9]+')
 @send_typing_action
 def comment_wordcloud(bot, update):
@@ -344,6 +364,7 @@ def comment_wordcloud(bot, update):
 
 
 # InlineKeyButton回调处理，生成演员详情
+@dispatcher.run_async
 @command(CallbackQueryHandler, pattern=r'actor\s[0-9]+')
 @send_typing_action
 def actor_keyboard(bot, update):
@@ -367,42 +388,8 @@ def actor_keyboard(bot, update):
     print("演员信息-执行时间:", end_time - start_time)
 
 
-# InlineKeyButton回调处理，生成获奖情况
-@command(CallbackQueryHandler, pattern=r'awards\s[a-z]+\s[0-9]+')
-@send_typing_action
-def comment_wordcloud(bot, update):
-    start_time = datetime.datetime.now()
-
-    *_, type_, id_ = update.callback_query.data.split()
-    user_name = update.callback_query.from_user.username
-    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
-          user_name + ' 生成获奖情况，类型：' + type_ + ' ID：' + id_)
-
-    result = funcs.awards(type_, id_)
-
-    bot.answer_callback_query(callback_query_id=update.callback_query.id,
-                              text='正在获取该{}的详细内容，请稍后'.format(
-                                  '电影' if type_ == 'movie' else '人'))
-
-    bot.send_message(chat_id=update.callback_query.message.chat_id,
-                     text='{}'.format(result),
-                     parse_mode=ParseMode.HTML)
-
-    end_time = datetime.datetime.now()
-    print("生成获奖情况-执行时间:", end_time - start_time)
-
-
-def error(bot, update, error):
-    """Log Errors caused by Updates."""
-    print('webhook_info "%s" \n'
-          'Update "%s" \n'
-          'caused error "%s"\n',
-          bot.get_webhook_info,
-          update,
-          error)
-
-
-# Inline mode回调处理，生成Inline详情
+# Inline mode回调处理，返回 Instant View
+@dispatcher.run_async
 @command(ChosenInlineResultHandler)
 def inline_info(bot, update):
     start_time = datetime.datetime.now()
@@ -421,7 +408,7 @@ def inline_info(bot, update):
                          reply_markup=InlineKeyboardMarkup(util.build_menu(
                              [InlineKeyboardButton("生成影评词云",
                                                    callback_data='comment_wordcloud ' + id_)],
-                             n_cols=1)) if score != 0 else None)
+                             n_cols=1)) if score != '暂无评分' else None)
 
     if callback_type == 'actor':
         print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + '用户 ' +
@@ -437,6 +424,8 @@ def inline_info(bot, update):
     print("Inline详情-执行时间:", end_time - start_time)
 
 
+# Inline Mode,生成快捷信息
+@dispatcher.run_async
 @command(InlineQueryHandler)
 def inline_query(bot, update):
     """Handle the inline query."""
@@ -458,6 +447,42 @@ def inline_query(bot, update):
     bot.answer_inline_query(update.inline_query.id, results)
 
 
+# 命令：/test，测试用途
+@dispatcher.run_async
+@command(CommandHandler, 'test')
+@send_typing_action
+def test(bot, update):
+    user_name = update.message.from_user.username
+    if user_name == 'frostin':
+        '''
+                bot.send_message(chat_id=update.message.chat_id,
+                                 text="*bold text*"
+                                      "_italic text_"
+                                      "[inline URL](http://www.example.com/)"
+                                      "[inline mention of a user](tg://user?id=123456789)"
+                                      "`inline fixed-width code`"
+                                      "```block_language"
+                                      "pre-formatted fixed-width code block"
+                                      "```",
+                                 parse_mode=ParseMode.MARKDOWN)
+
+                bot.send_message(chat_id=update.message.chat_id,
+                                 text='<b>bold</b>, <strong>bold</strong>'
+                                      '<i>italic</i>, <em>italic</em>'
+                                      '<a href="http://www.example.com/">inline URL</a>'
+                                      '<a href="tg://user?id=123456789">inline mention of a user</a>'
+                                      '<code>inline fixed-width code</code>'
+                                      '<pre>pre-formatted fixed-width code block</pre>',
+                                 parse_mode=ParseMode.HTML)
+                '''
+        url = funcs.instant_view()
+        bot.send_message(chat_id=update.message.chat_id,
+                         text=url)
+    else:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="测试用，非开发者不能使用")
+
+
 if __name__ == '__main__':
     dispatcher.add_error_handler(error)
     util.save_cookie()
@@ -470,7 +495,8 @@ if __name__ == '__main__':
 
     # webhook 方式
     app.run(host='127.0.0.1',
-            port=8443)
+            port=8443,
+            debug=True)
 
     # 预缓存正在热映中的电影的影评词云图片，默认不开启
     # util.preload()
