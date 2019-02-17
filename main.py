@@ -447,42 +447,6 @@ def inline_query(bot, update):
     bot.answer_inline_query(update.inline_query.id, results)
 
 
-# 命令：/test，测试用途
-@dispatcher.run_async
-@command(CommandHandler, 'test')
-@send_typing_action
-def test(bot, update):
-    user_name = update.message.from_user.username
-    if user_name == 'frostin':
-        '''
-                bot.send_message(chat_id=update.message.chat_id,
-                                 text="*bold text*"
-                                      "_italic text_"
-                                      "[inline URL](http://www.example.com/)"
-                                      "[inline mention of a user](tg://user?id=123456789)"
-                                      "`inline fixed-width code`"
-                                      "```block_language"
-                                      "pre-formatted fixed-width code block"
-                                      "```",
-                                 parse_mode=ParseMode.MARKDOWN)
-
-                bot.send_message(chat_id=update.message.chat_id,
-                                 text='<b>bold</b>, <strong>bold</strong>'
-                                      '<i>italic</i>, <em>italic</em>'
-                                      '<a href="http://www.example.com/">inline URL</a>'
-                                      '<a href="tg://user?id=123456789">inline mention of a user</a>'
-                                      '<code>inline fixed-width code</code>'
-                                      '<pre>pre-formatted fixed-width code block</pre>',
-                                 parse_mode=ParseMode.HTML)
-                '''
-        url = funcs.instant_view()
-        bot.send_message(chat_id=update.message.chat_id,
-                         text=url)
-    else:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="测试用，非开发者不能使用")
-
-
 if __name__ == '__main__':
     dispatcher.add_error_handler(error)
     util.save_cookie()
