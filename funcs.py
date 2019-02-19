@@ -3,11 +3,10 @@
 
 import asyncio
 import datetime
-import json
 import re
+import ujson
 from urllib import parse
 
-import aiohttp
 import jieba
 import numpy
 import pandas
@@ -76,7 +75,7 @@ def new_movies():
 def movie_search(movie_name):
     with util.my_opener().open('https://api.douban.com/v2/movie/search?tag={}'.format(
             parse.quote(movie_name))) as html_data:
-        json_data = json.loads(html_data.read().decode('utf-8'))
+        json_data = ujson.loads(html_data.read().decode('utf-8'))
 
     subjects = json_data['subjects']
     movie_list = list()
@@ -123,14 +122,14 @@ def movie_info(id_):
 
         json_data = soup.find('script', type='application/ld+json').text
         try:
-            json_data = json.loads(json_data)
+            json_data = ujson.loads(json_data)
             title = json_data['name']
             image_html = '<img src="' + json_data['image'] + '">'
             score = json_data['aggregateRating']['ratingValue']
-        except json.decoder.JSONDecodeError:
+        except ujson.decoder.JSONDecodeError:
             with util.my_opener().open('https://api.douban.com/v2/movie/subject/' +
                                        str(id_)) as html_data:
-                json_data = json.load(html_data)
+                json_data = ujson.load(html_data)
                 title = json_data['title']
                 image_html = '<img src="' + json_data['images']['small'] + '">'
                 score = json_data['rating']['average']
@@ -276,7 +275,7 @@ def actor_info(id_):
 def subject_suggest(name):
     with util.my_opener().open(
             'https://movie.douban.com/j/subject_suggest?q={}'.format(parse.quote(name))) as html_data:
-        json_data = json.loads(html_data.read().decode('utf-8'))
+        json_data = ujson.loads(html_data.read().decode('utf-8'))
         suggest_result_list = list()
         for i in json_data:
             suggest_result = dict()

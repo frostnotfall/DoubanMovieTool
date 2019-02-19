@@ -17,9 +17,9 @@ from functools import wraps
 from flask import Flask, request
 from telegram import (Bot, ChatAction, InlineKeyboardButton, InlineKeyboardMarkup,
                       InlineQueryResultArticle, InputTextMessageContent, KeyboardButton, ParseMode,
-                      ReplyKeyboardMarkup, Update, TelegramError)
-from telegram.ext import (CallbackQueryHandler, CommandHandler, Dispatcher, InlineQueryHandler,
-                          Updater, MessageHandler, ChosenInlineResultHandler)
+                      ReplyKeyboardMarkup, Update)
+from telegram.ext import (CallbackQueryHandler, ChosenInlineResultHandler, CommandHandler, Dispatcher,
+                          Updater, InlineQueryHandler, MessageHandler)
 
 import funcs
 import util
@@ -388,7 +388,7 @@ def actor_keyboard(bot, update):
     print("演员信息-执行时间:", end_time - start_time)
 
 
-# Inline mode回调处理，返回 Instant View
+# Inline mode 快捷搜索回调处理，返回 Instant View
 @dispatcher.run_async
 @command(ChosenInlineResultHandler)
 def inline_info(bot, update):
@@ -428,9 +428,9 @@ def inline_info(bot, update):
 @dispatcher.run_async
 @command(InlineQueryHandler)
 def inline_query(bot, update):
-    """Handle the inline query."""
+    user = update.inline_query.from_user
     name = update.inline_query.query
-    print(name)
+    print('用户：{user} 输入:"{name}"'.format(user=user, name=name))
 
     suggest_result_list = funcs.subject_suggest(name)
     results = list()

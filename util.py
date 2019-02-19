@@ -4,12 +4,12 @@
 
 import asyncio
 import datetime
-import json
 import os
 import random
 import re
 import threading
 import time
+import ujson
 from http import cookiejar
 from urllib import request
 
@@ -75,7 +75,7 @@ def my_session():
     async def main():
         try:
             with open('cookies.json', 'r', encoding="UTF-8") as f:
-                cookies = json.loads(f.read())
+                cookies = ujson.loads(f.read())
             conn = aiohttp.TCPConnector()
             session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
                                             headers=head,
@@ -91,7 +91,7 @@ def my_session():
                     for key, cookie in res.cookies.items():
                         cookies[cookie.key] = cookie.value
                     with open('cookies.json', 'w') as f:
-                        json.dump(cookies, f)
+                        ujson.dump(cookies, f)
 
         return session
 

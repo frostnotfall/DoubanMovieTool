@@ -41,6 +41,8 @@ A telegram bot for douban movie
 通过CustomKeyboardButton、InlineKeyboardButton，InlineQuery，
 以及 Instant View 方式呈现输出。
 
+碎碎念:https://www.frost.net.cn/archives/1433
+
 截图
 ====
 * 功能

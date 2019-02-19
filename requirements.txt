@@ -4,7 +4,9 @@ numpy
 beautifulsoup4
 jieba
 wordcloud
+matplotlib
 pandas
 lxml
 aiohttp
 aiograph
+ujson
