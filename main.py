@@ -449,7 +449,6 @@ def inline_query(bot, update):
 
 if __name__ == '__main__':
     dispatcher.add_error_handler(error)
-    util.save_cookie()
 
     # 定时清除词云图片
     util.removal()

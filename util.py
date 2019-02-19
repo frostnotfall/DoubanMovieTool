@@ -55,12 +55,17 @@ def save_cookie():
 
     opener.open('https://movie.douban.com')
     cookie.save(ignore_discard=True, ignore_expires=True)
+    return opener
 
 
 def my_opener():
-    cookie = cookiejar.MozillaCookieJar()
-    cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
-    opener = request.build_opener(request.HTTPCookieProcessor(cookie))
+    try:
+        cookie = cookiejar.MozillaCookieJar()
+        cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
+        opener = request.build_opener(request.HTTPCookieProcessor(cookie))
+    except (FileNotFoundError, cookiejar.LoadError):
+        opener = save_cookie()
+
     header = []
 
     for key, value in head.items():
