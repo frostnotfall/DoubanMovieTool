@@ -7,6 +7,7 @@ import re
 import ujson
 from urllib import parse
 
+import aiohttp
 import jieba
 import numpy
 import pandas
@@ -120,92 +121,76 @@ def movie_info(id_):
             html_data = html_res.read().decode('UTF-8')
         soup = BeautifulSoup(html_data, 'lxml')
 
-        json_data = soup.find('script', type='application/ld+json').text
-        try:
-            json_data = ujson.loads(json_data)
-            title = json_data['name']
-            image_html = '<img src="' + json_data['image'] + '">'
-            score = json_data['aggregateRating']['ratingValue']
-        except ujson.decoder.JSONDecodeError:
-            with util.my_opener().open('https://api.douban.com/v2/movie/subject/' +
-                                       str(id_)) as html_data:
-                json_data = ujson.load(html_data)
-                title = json_data['title']
-                image_html = '<img src="' + json_data['images']['small'] + '">'
-                score = json_data['rating']['average']
-
-        if score == '' or score == 0:
+        # json part
+        json_data = ujson.loads(soup.find('script', type='application/ld+json').text)
+        title = json_data['name']
+        image_html = '<img src="' + json_data['image'] + '">'
+        score = json_data['aggregateRating']['ratingValue']
+        if score == '':
             score = '暂无评分'
         score_html = '<strong>评分：</strong>{}<br />'.format(score)
 
+        # info part
         info = soup.find('div', id='info')
-        related_info = soup.find('div', class_='related-info')
-
         directors_html = '<strong>导演：</strong>' + str(info.find_all('a', rel="v:directedBy")).strip(
             '[|]') + '<br />'
-
         author_html = '<strong>编剧：</strong>' + str(
             info.find('span', text='编剧').next_sibling.next_sibling).replace('<span class="attrs">',
                                                                             '').replace('</span>',
                                                                                         '') + '<br />'
-
         actors_html = '<strong>主演：</strong>' + str(info.find_all('a', rel="v:starring")).strip(
             '[|]') + '<br />'
-
         genre_set = set()
         for genre in info.find_all('span', property="v:genre"):
             genre_set.add(genre.text)
         genre_html = '<strong>类型：</strong>' + ' / '.join(genre_set) + '<br/>'
-
         country_html = '<strong>制片国家/地区：</strong>' + str(
             info.find('span', text='制片国家/地区:').next_sibling).strip() + '<br />'
-
         language_html = '<strong>语言：</strong>' + str(
             info.find('span', text='语言:').next_sibling).strip() + '<br />'
-
         publish_date_set = set()
         for publish_date in info.find_all('span', property="v:initialReleaseDate"):
             publish_date_set.add(publish_date.text)
         publish_date_html = '<strong>上映日期：</strong>' + ' / '.join(publish_date_set) + '<br/>'
-
         aka_html = '<strong>又名：</strong>' + str(
             info.find('span', text='又名:').next_sibling).strip() + '<br />'
-
         imdb_html = '<strong>IMDb链接：</strong>' + str(
             info.find(href=re.compile(r"^http://www.imdb.com"))) + '<br />'
-
-        try:
-            summary = related_info.find('span', class_="all hidden").text.strip().replace(' ', '')
-        except AttributeError:
-            summary = related_info.find('span', property="v:summary").text.strip().replace(' ', '')
-
-        summary_html = '<h3>{}:</h3><p>{}</p>'.format(related_info.h2.i.text, summary)
-
         info_html = image_html + '<h3>电影信息</h3>' + score_html + directors_html + author_html + \
                     actors_html + genre_html + country_html + language_html + publish_date_html + \
                     aka_html + imdb_html
         info_html = info_html.replace('/celebrity', 'https://movie.douban.com/celebrity')
 
-        with util.my_opener().open(
-                'https://movie.douban.com/subject/{}/awards/'.format(id_)) as html_res:
-            html_data = html_res.read().decode('utf-8')
-        soup = BeautifulSoup(html_data, 'lxml')
-        content = soup.find('div', id='content')
+        # summary part
+        related_info = soup.find('div', class_='related-info')
+        try:
+            summary = related_info.find('span', class_="all hidden").text.strip().replace(' ', '')
+        except AttributeError:
+            summary = related_info.find('span', property="v:summary").text.strip().replace(' ', '')
+        summary_html = '<h3>{}:</h3><p>{}</p>'.format(related_info.h2.i.text, summary)
 
-        content_html = '<h3>{}：</h3>'.format(content.h1.text)
-
-        for awards in content.find_all('div', class_="awards"):
-            awards_div_h2 = awards.div.h2
-            awards_href = awards_div_h2.a.get('href')
-            awards_name = awards_div_h2.get_text().replace('\n', '')
-            awards_name_html = '<br/><em><a href="{href}">{name}</a></em><br/>'.format(
-                href=awards_href, name=awards_name)
-            awards_html = str(awards.find_all('ul')).strip('[|]').replace(
-                ', ', '').replace('<li></li>', '').replace('\n', '')
-            content_html = content_html + awards_name_html + awards_html
-
-        page = await telegraph.create_page(title, info_html + summary_html + content_html)
+        # awards part
+        if soup.find('div', class_='mod') is not None:
+            with util.my_opener().open(
+                    'https://movie.douban.com/subject/{}/awards/'.format(id_)) as html_res:
+                html_data = html_res.read().decode('utf-8')
+            soup = BeautifulSoup(html_data, 'lxml')
+            content = soup.find('div', id='content')
+            awards_html = '<h3>{}：</h3>'.format(content.h1.text)
+            for awards in content.find_all('div', class_="awards"):
+                awards_div_h2 = awards.div.h2
+                awards_href = awards_div_h2.a.get('href')
+                awards_name = awards_div_h2.get_text().replace('\n', '')
+                awards_name_html = '<br/><em><a href="{href}">{name}</a></em><br/>'.format(
+                    href=awards_href, name=awards_name)
+                awards_category_html = str(awards.find_all('ul')).strip('[|]').replace(
+                    ', ', '').replace('<li></li>', '').replace('\n', '')
+                awards_html = awards_html + awards_name_html + awards_category_html
+            page = await telegraph.create_page(title, info_html + summary_html + awards_html)
+        else:
+            page = await telegraph.create_page(title, info_html + summary_html)
         print('生成Instant View， URL:', page.url)
+
         return page.url, score
 
     try:
@@ -226,42 +211,43 @@ def actor_info(id_):
         with util.my_opener().open(
                 'https://movie.douban.com/celebrity/{id}/'.format(id=id_)) as html_res:
             html_data = html_res.read().decode('UTF-8')
-
         soup = BeautifulSoup(html_data, 'lxml')
+
+        # info part
         headline = soup.find('div', id='headline', class_="item")
         actor_name = headline.find('div', class_="pic").find('a', class_="nbg").get('title')
         image_url = headline.find('div', class_="pic").find('a', class_="nbg").get('href')
         image_html = '<img src="{}">'.format(image_url)
-
         ul = headline.find('ul', class_="")
         ul_html = str(ul).replace('span', 'strong').replace('\n', '').replace('  ', '')
-
         info_html = image_html + '<h3>影人信息</h3>' + ul_html
 
+        # summary part
         intro = soup.find('div', id="intro")
         try:
             summary = intro.find('span', class_="all hidden").text.strip().replace(' ', '')
         except AttributeError:
             summary = intro.find('div', class_="bd").text.strip().replace(' ', '')
-
         summary_html = '<h3>影人简介:</h3><p>{}</p>'.format(summary)
 
-        with util.my_opener().open(
-                'https://movie.douban.com/celebrity/{id}/awards/'.format(id=id_)) as html_res:
-            html_data = html_res.read().decode('utf-8')
-        soup = BeautifulSoup(html_data, 'lxml')
-        content = soup.find('div', id='content')
-
-        content_html = '<h3>{}</h3>'.format(content.h1.text)
-
-        for awards in content.find_all('div', class_="awards"):
-            awards_html = str(awards).replace('<div class="awards">', '').replace(
-                '<div class="hd">', '').replace('</div>', '').replace(
-                'h2', 'h4').replace('\n', '')
-            content_html = content_html + awards_html
-
-        page = await telegraph.create_page(actor_name, info_html + summary_html + content_html)
+        # awards part
+        if soup.find('div', class_='mod').find('div', class_='hd') is not None:
+            with util.my_opener().open(
+                    'https://movie.douban.com/celebrity/{id}/awards/'.format(id=id_)) as html_res:
+                html_data = html_res.read().decode('utf-8')
+            soup = BeautifulSoup(html_data, 'lxml')
+            content = soup.find('div', id='content')
+            content_html = '<h3>{}</h3>'.format(content.h1.text)
+            for awards in content.find_all('div', class_="awards"):
+                awards_html = str(awards).replace('<div class="awards">', '').replace(
+                    '<div class="hd">', '').replace('</div>', '').replace(
+                    'h2', 'h4').replace('\n', '')
+                content_html = content_html + awards_html
+            page = await telegraph.create_page(actor_name, info_html + summary_html + content_html)
+        else:
+            page = await telegraph.create_page(actor_name, info_html + summary_html)
         print('生成Instant View， URL:', page.url)
+
         return page.url
 
     try:
@@ -319,15 +305,18 @@ def get_comments(id_):
         return pure_comments
 
     async def download(url):
-        html = await fetch(session, url)
-        pure_comments = await parser(html)
-        return pure_comments
+        async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
+                                         headers=util.head,
+                                         cookies=util.cookies) as session:
+            html = await fetch(session, url)
+            pure_comments = await parser(html)
+            return pure_comments
 
     urls = ['https://movie.douban.com/subject/' + str(id_) + '/comments?start=' + str(
         i * 20) + '&limit=20&sort=new_score&status=P'.format(i) for i in range(11)]
 
-    session = util.my_session()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     tasks = [asyncio.ensure_future(download(url)) for url in urls]
     loop.run_until_complete(asyncio.wait(tasks))
 

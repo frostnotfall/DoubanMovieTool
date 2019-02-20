@@ -42,6 +42,35 @@ head = {'Connection': 'Keep-Alive',
         }
 
 
+async def aiohttp_check_cookie():
+    try:
+        with open('cookies.json', 'r', encoding="UTF-8") as f:
+            cookies = ujson.load(f)
+        async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
+                                         headers=head,
+                                         cookies=cookies) as session:
+            async with session.get('https://movie.douban.com') as res:
+                # print(res.status)
+                pass
+    except (ValueError, FileNotFoundError):
+        async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
+                                         headers=head) as session:
+            async with session.get('https://movie.douban.com') as res:
+                # cookies = dict()
+                cookies = session.cookie_jar.filter_cookies('https://movie.douban.com')
+                for key, cookie in res.cookies.items():
+                    cookies[cookie.key] = cookie.value
+                with open('cookies.json', 'w') as f:
+                    ujson.dump(cookies, f)
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+loop.run_until_complete(aiohttp_check_cookie())
+
+with open('cookies.json', 'r', encoding="UTF-8") as f:
+    cookies = ujson.load(f)
+
+
 def save_cookie():
     filename = 'cookie.txt'
     cookie = cookiejar.MozillaCookieJar(filename)
@@ -74,37 +103,6 @@ def my_opener():
     opener.add_headers = header
 
     return opener
-
-
-def my_session():
-    async def main():
-        try:
-            with open('cookies.json', 'r', encoding="UTF-8") as f:
-                cookies = ujson.loads(f.read())
-            conn = aiohttp.TCPConnector()
-            session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
-                                            headers=head,
-                                            cookies=cookies,
-                                            connector=conn)
-        except (ValueError, FileNotFoundError):
-            async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
-                                             headers=head) as session:
-
-                async with session.get('https://movie.douban.com') as res:
-                    # cookies = dict()
-                    cookies = session.cookie_jar.filter_cookies('https://movie.douban.com')
-                    for key, cookie in res.cookies.items():
-                        cookies[cookie.key] = cookie.value
-                    with open('cookies.json', 'w') as f:
-                        ujson.dump(cookies, f)
-
-        return session
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    session = loop.run_until_complete(main())
-
-    return session
 
 
 class MyThread(threading.Thread):

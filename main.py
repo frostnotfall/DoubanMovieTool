@@ -7,7 +7,7 @@
 @author: frostnotfall
 @license: MIT License
 @contact: frostnotfall@gmail.com
-@software: douban_movie_tool
+@software: DoubanMovieBot
 """
 
 import datetime
