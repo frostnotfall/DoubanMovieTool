@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
+
 import asyncio
 import datetime
 import re
@@ -15,11 +16,18 @@ from aiograph import Telegraph
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
 
-import util
+import utils
+
+# 数字编码范围
+id_pattern = re.compile(r"\d+")
+# \u4e00-\u9fa5 Unicode汉字编码范围
+han_pattern = re.compile(r'[\u4e00-\u9fa5]+')
+# imdb 链接
+imdb_pattern = re.compile(r"^http://www.imdb.com")
 
 
 def load():
-    with util.my_opener().open('https://movie.douban.com/cinema/nowplaying/beijing/') as html_res:
+    with utils.my_opener().open('https://movie.douban.com/cinema/nowplaying/beijing/') as html_res:
         html_data = html_res.read().decode('utf-8')
 
     soup = BeautifulSoup(html_data, 'lxml')
@@ -37,7 +45,7 @@ def load():
 
 
 def coming():
-    with util.my_opener().open('https://movie.douban.com/coming') as html_res:
+    with utils.my_opener().open('https://movie.douban.com/coming') as html_res:
         html_data = html_res.read().decode('utf-8')
 
     soup = BeautifulSoup(html_data, 'lxml')
@@ -48,7 +56,7 @@ def coming():
     for i in coming_list.find_all('a'):
         movie_name = i.text
         movie_url = i.get('href').strip("//")
-        movie_id = re.search(r"\d+", movie_url).group()
+        movie_id = id_pattern.search(movie_url).group()
         movie_list.append(movie_name)
         movie_id_list.append('movie ' + movie_id)
 
@@ -56,7 +64,7 @@ def coming():
 
 
 def new_movies():
-    with util.my_opener().open('https://movie.douban.com/chart') as html_res:
+    with utils.my_opener().open('https://movie.douban.com/chart') as html_res:
         html_data = html_res.read().decode('utf-8')
 
     soup = BeautifulSoup(html_data, 'lxml')
@@ -66,7 +74,7 @@ def new_movies():
     for i in soup.find_all('a', class_='nbg'):
         movie_name = i['title']
         movie_url = i.get('href').strip("//")
-        movie_id = re.search(r"\d+", movie_url).group()
+        movie_id = id_pattern.search(movie_url).group()
         movie_list.append(movie_name)
         movie_id_list.append('movie ' + movie_id)
 
@@ -74,8 +82,8 @@ def new_movies():
 
 
 def movie_search(movie_name):
-    with util.my_opener().open('https://api.douban.com/v2/movie/search?tag={}'.format(
-            parse.quote(movie_name))) as html_data:
+    with utils.my_opener().open(
+            f'https://api.douban.com/v2/movie/search?tag={parse.quote(movie_name)}') as html_data:
         json_data = ujson.loads(html_data.read().decode('utf-8'))
 
     subjects = json_data['subjects']
@@ -85,14 +93,15 @@ def movie_search(movie_name):
 
     for i in range_len_subjects:
         movie_list.append(subjects[i]['title'])
-        movie_id_list.append('movie ' + subjects[i]['id'])
+        movie_id_list.append(f'''movie {subjects[i]['id']}''')
 
     return movie_list, movie_id_list
 
 
 def actor_search(actor_name):
-    with util.my_opener().open('https://movie.douban.com/celebrities/search?search_text={}'.format(
-            parse.quote(actor_name))) as html_res:
+    with utils.my_opener().open(
+            f'https://movie.douban.com/celebrities/search?search_text={parse.quote(actor_name)}') \
+            as html_res:
         html_data = html_res.read().decode('UTF-8')
 
     soup = BeautifulSoup(html_data, 'lxml')
@@ -103,9 +112,9 @@ def actor_search(actor_name):
     for each_result in search_result:
         actor_name = each_result.string
         actor_url = each_result.find('a').get('href')
-        actor_id = re.search(r"\d+", actor_url).group()
+        actor_id = id_pattern.search(actor_url).group()
         actor_list.append(actor_name)
-        actor_id_list.append('actor ' + actor_id)
+        actor_id_list.append(f'actor {actor_id}')
 
     return actor_list, actor_id_list
 
@@ -115,50 +124,59 @@ def movie_info(id_):
     asyncio.set_event_loop(loop)
     telegraph = Telegraph()
 
-    async def main(id_):
+    async def get_info(id_):
         await telegraph.create_account('DoubanMovieTool')
-        with util.my_opener().open('https://movie.douban.com/subject/{}/'.format(id_)) as html_res:
+        with utils.my_opener().open(f'https://movie.douban.com/subject/{id_}/') as html_res:
             html_data = html_res.read().decode('UTF-8')
         soup = BeautifulSoup(html_data, 'lxml')
 
         # json part
         json_data = ujson.loads(soup.find('script', type='application/ld+json').text)
         title = json_data['name']
-        image_html = '<img src="' + json_data['image'] + '">'
+        image_html = f'''<img src="{json_data['image']}">'''
         score = json_data['aggregateRating']['ratingValue']
         if score == '':
             score = '暂无评分'
-        score_html = '<strong>评分：</strong>{}<br />'.format(score)
+        score_html = f'<strong>评分：</strong>{score}<br />'
 
         # info part
         info = soup.find('div', id='info')
-        directors_html = '<strong>导演：</strong>' + str(info.find_all('a', rel="v:directedBy")).strip(
-            '[|]') + '<br />'
-        author_html = '<strong>编剧：</strong>' + str(
-            info.find('span', text='编剧').next_sibling.next_sibling).replace('<span class="attrs">',
-                                                                            '').replace('</span>',
-                                                                                        '') + '<br />'
-        actors_html = '<strong>主演：</strong>' + str(info.find_all('a', rel="v:starring")).strip(
-            '[|]') + '<br />'
+        directors = str(info.find_all('a', rel="v:directedBy")).strip('[|]')
+        directors_html = f'''<strong>导演：</strong>{directors if directors != '' else '暂无导演信息'}<br />'''
+        try:
+            author_html = f'''<strong>编剧：</strong>{str(
+                info.find('span', text='编剧').next_sibling.next_sibling).replace('<span class="attrs">',
+                                                                                '').replace('</span>',
+                                                                                            '')}<br />'''
+        except AttributeError:
+            author_html = f'<strong>编剧：</strong>暂无编剧信息<br />'
+        actors = str(info.find_all('a', rel="v:starring")).strip('[|]')
+        actors_html = f'''<strong>主演：</strong>{actors if actors != '' else '暂无主演信息'}<br />'''
         genre_set = set()
         for genre in info.find_all('span', property="v:genre"):
             genre_set.add(genre.text)
-        genre_html = '<strong>类型：</strong>' + ' / '.join(genre_set) + '<br/>'
-        country_html = '<strong>制片国家/地区：</strong>' + str(
-            info.find('span', text='制片国家/地区:').next_sibling).strip() + '<br />'
-        language_html = '<strong>语言：</strong>' + str(
-            info.find('span', text='语言:').next_sibling).strip() + '<br />'
+        genre_html = f'''<strong>类型：</strong>{' / '.join(genre_set)}<br/>'''
+        country_html = f'''<strong>制片国家/地区：</strong>{str(
+            info.find('span', text='制片国家/地区:').next_sibling).strip()}<br />'''
+        try:
+            language_html = f'''<strong>语言：</strong>{
+            str(info.find('span', text='语言:').next_sibling).strip()}<br />'''
+        except AttributeError:
+            language_html = f'''<strong>语言：</strong>暂无信息<br />'''
         publish_date_set = set()
         for publish_date in info.find_all('span', property="v:initialReleaseDate"):
             publish_date_set.add(publish_date.text)
-        publish_date_html = '<strong>上映日期：</strong>' + ' / '.join(publish_date_set) + '<br/>'
-        aka_html = '<strong>又名：</strong>' + str(
-            info.find('span', text='又名:').next_sibling).strip() + '<br />'
-        imdb_html = '<strong>IMDb链接：</strong>' + str(
-            info.find(href=re.compile(r"^http://www.imdb.com"))) + '<br />'
-        info_html = image_html + '<h3>电影信息</h3>' + score_html + directors_html + author_html + \
-                    actors_html + genre_html + country_html + language_html + publish_date_html + \
-                    aka_html + imdb_html
+        publish_date_html = f'''<strong>上映日期：</strong>{' / '.join(publish_date_set)}<br/>'''
+        try:
+            aka_html = f'''<strong>又名：</strong>{
+            str(info.find('span', text='又名:').next_sibling).strip()}<br />'''
+        except AttributeError:
+            aka_html = f'''<strong>又名：</strong>暂无信息<br />'''
+        imdb = str(info.find(href=imdb_pattern))
+        imdb_html = f'''<strong>IMDb链接：</strong>{imdb if imdb is None else '暂无imdb信息'}<br />'''
+        info_html = f'{image_html}<h3>电影信息</h3>{score_html}{directors_html}{author_html}' \
+            f'{actors_html}{genre_html}{country_html}{language_html}{publish_date_html}' \
+            f'{aka_html}{imdb_html}'
         info_html = info_html.replace('/celebrity', 'https://movie.douban.com/celebrity')
 
         # summary part
@@ -167,34 +185,32 @@ def movie_info(id_):
             summary = related_info.find('span', class_="all hidden").text.strip().replace(' ', '')
         except AttributeError:
             summary = related_info.find('span', property="v:summary").text.strip().replace(' ', '')
-        summary_html = '<h3>{}:</h3><p>{}</p>'.format(related_info.h2.i.text, summary)
+        summary_html = f'<h3>{related_info.h2.i.text}:</h3><p>{summary}</p>'
 
         # awards part
         if soup.find('div', class_='mod') is not None:
-            with util.my_opener().open(
-                    'https://movie.douban.com/subject/{}/awards/'.format(id_)) as html_res:
+            with utils.my_opener().open(f'https://movie.douban.com/subject/{id_}/awards/') as html_res:
                 html_data = html_res.read().decode('utf-8')
             soup = BeautifulSoup(html_data, 'lxml')
             content = soup.find('div', id='content')
-            awards_html = '<h3>{}：</h3>'.format(content.h1.text)
+            awards_html = f'<h3>{content.h1.text}：</h3>'
             for awards in content.find_all('div', class_="awards"):
                 awards_div_h2 = awards.div.h2
                 awards_href = awards_div_h2.a.get('href')
                 awards_name = awards_div_h2.get_text().replace('\n', '')
-                awards_name_html = '<br/><em><a href="{href}">{name}</a></em><br/>'.format(
-                    href=awards_href, name=awards_name)
+                awards_name_html = f'<br/><em><a href="{awards_href}">{awards_name}</a></em><br/>'
                 awards_category_html = str(awards.find_all('ul')).strip('[|]').replace(
                     ', ', '').replace('<li></li>', '').replace('\n', '')
-                awards_html = awards_html + awards_name_html + awards_category_html
-            page = await telegraph.create_page(title, info_html + summary_html + awards_html)
+                awards_html = f'{awards_html}{awards_name_html}{awards_category_html}'
+            page = await telegraph.create_page(title, f'{info_html}{summary_html}{awards_html}')
         else:
-            page = await telegraph.create_page(title, info_html + summary_html)
+            page = await telegraph.create_page(title, f'{info_html}{summary_html}')
         print('生成Instant View， URL:', page.url)
 
         return page.url, score
 
     try:
-        url, score = loop.run_until_complete(main(id_))
+        url, score = loop.run_until_complete(get_info(id_))
     finally:
         loop.run_until_complete(telegraph.close())
 
@@ -208,8 +224,7 @@ def actor_info(id_):
 
     async def main():
         await telegraph.create_account('DoubanMovieTool')
-        with util.my_opener().open(
-                'https://movie.douban.com/celebrity/{id}/'.format(id=id_)) as html_res:
+        with utils.my_opener().open(f'https://movie.douban.com/celebrity/{id_}/') as html_res:
             html_data = html_res.read().decode('UTF-8')
         soup = BeautifulSoup(html_data, 'lxml')
 
@@ -217,10 +232,10 @@ def actor_info(id_):
         headline = soup.find('div', id='headline', class_="item")
         actor_name = headline.find('div', class_="pic").find('a', class_="nbg").get('title')
         image_url = headline.find('div', class_="pic").find('a', class_="nbg").get('href')
-        image_html = '<img src="{}">'.format(image_url)
+        image_html = f'<img src="{image_url}">'
         ul = headline.find('ul', class_="")
         ul_html = str(ul).replace('span', 'strong').replace('\n', '').replace('  ', '')
-        info_html = image_html + '<h3>影人信息</h3>' + ul_html
+        info_html = f'{image_html}<h3>影人信息</h3>{ul_html}'
 
         # summary part
         intro = soup.find('div', id="intro")
@@ -228,24 +243,24 @@ def actor_info(id_):
             summary = intro.find('span', class_="all hidden").text.strip().replace(' ', '')
         except AttributeError:
             summary = intro.find('div', class_="bd").text.strip().replace(' ', '')
-        summary_html = '<h3>影人简介:</h3><p>{}</p>'.format(summary)
+        summary_html = f'<h3>影人简介:</h3><p>{summary}</p>'
 
         # awards part
         if soup.find('div', class_='mod').find('div', class_='hd') is not None:
-            with util.my_opener().open(
-                    'https://movie.douban.com/celebrity/{id}/awards/'.format(id=id_)) as html_res:
+            with utils.my_opener().open(f'https://movie.douban.com/celebrity/{id_}/awards/') as html_res:
                 html_data = html_res.read().decode('utf-8')
             soup = BeautifulSoup(html_data, 'lxml')
             content = soup.find('div', id='content')
-            content_html = '<h3>{}</h3>'.format(content.h1.text)
-            for awards in content.find_all('div', class_="awards"):
+            content_html = f'<h3>{content.h1.text}</h3>'
+            soup_awards = content.find_all('div', class_="awards")
+            for awards in soup_awards:
                 awards_html = str(awards).replace('<div class="awards">', '').replace(
                     '<div class="hd">', '').replace('</div>', '').replace(
                     'h2', 'h4').replace('\n', '')
-                content_html = content_html + awards_html
-            page = await telegraph.create_page(actor_name, info_html + summary_html + content_html)
+                content_html += awards_html
+            page = await telegraph.create_page(actor_name, f'{info_html}{summary_html}{content_html}')
         else:
-            page = await telegraph.create_page(actor_name, info_html + summary_html)
+            page = await telegraph.create_page(actor_name, f'{info_html}{summary_html}')
         print('生成Instant View， URL:', page.url)
 
         return page.url
@@ -259,15 +274,15 @@ def actor_info(id_):
 
 
 def subject_suggest(name):
-    with util.my_opener().open(
-            'https://movie.douban.com/j/subject_suggest?q={}'.format(parse.quote(name))) as html_data:
+    with utils.my_opener().open(
+            f'https://movie.douban.com/j/subject_suggest?q={parse.quote(name)}') as html_data:
         json_data = ujson.loads(html_data.read().decode('utf-8'))
         suggest_result_list = list()
         for i in json_data:
             suggest_result = dict()
             if i['type'] == 'movie':
                 suggest_result['type'] = 'movie'
-                suggest_result['title'] = str(i['title']) + '(' + str(i['year']) + ')'
+                suggest_result['title'] = f'''{str(i['title'])}({str(i['year'])})'''
             elif i['type'] == 'celebrity':
                 suggest_result['type'] = 'actor'
                 suggest_result['title'] = str(i['title'])
@@ -295,25 +310,23 @@ def get_comments(id_):
 
         comments_formatted = str()
         for k in range(len(comments_list)):
-            comments_formatted = comments_formatted + (str(comments_list[k])).strip()
+            comments_formatted += (str(comments_list[k])).strip()
 
-        # \u4e00-\u9fa5 Unicode汉字编码范围
-        pattern = re.compile(r'[\u4e00-\u9fa5]+')
-        comments_with_punctuation = re.findall(pattern, comments_formatted)
+        comments_with_punctuation = re.findall(han_pattern, comments_formatted)
         pure_comments = ''.join(comments_with_punctuation)
 
         return pure_comments
 
     async def download(url):
         async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
-                                         headers=util.head,
-                                         cookies=util.cookies) as session:
+                                         headers=utils.head,
+                                         cookies=utils.cookies) as session:
             html = await fetch(session, url)
             pure_comments = await parser(html)
             return pure_comments
 
-    urls = ['https://movie.douban.com/subject/' + str(id_) + '/comments?start=' + str(
-        i * 20) + '&limit=20&sort=new_score&status=P'.format(i) for i in range(11)]
+    urls = [f'https://movie.douban.com/subject/{str(id_)}/comments?start={str(i * 20)}'
+            f'&limit=20&sort=new_score&status=P' for i in range(11)]
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -355,7 +368,6 @@ def save_img(id_):
     try:
         wordcloud = wordcloud.fit_words(dict(word_frequency_list))
     except ValueError:
-        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
-              '：' + "电影ID：" + id_ + " 获取评论失败")
+        print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：电影ID：{id_} 获取评论失败")
         return
-    wordcloud.to_file("./img/" + id_ + ".jpg")
+    wordcloud.to_file(f"./img/{id_}.jpg")

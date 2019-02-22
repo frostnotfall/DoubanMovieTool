@@ -4,19 +4,18 @@
 
 import asyncio
 import datetime
-import os
 import random
-import re
 import threading
 import time
 import ujson
 from http import cookiejar
+from pathlib import Path
 from urllib import request
 
 import aiohttp
 from telegram.ext import (BaseFilter)
 
-import funcs
+import data_funcs
 
 ua = [
     "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)\
@@ -50,18 +49,17 @@ async def aiohttp_check_cookie():
                                          headers=head,
                                          cookies=cookies) as session:
             async with session.get('https://movie.douban.com') as res:
-                # print(res.status)
                 pass
     except (ValueError, FileNotFoundError):
         async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
                                          headers=head) as session:
             async with session.get('https://movie.douban.com') as res:
-                # cookies = dict()
                 cookies = session.cookie_jar.filter_cookies('https://movie.douban.com')
                 for key, cookie in res.cookies.items():
                     cookies[cookie.key] = cookie.value
                 with open('cookies.json', 'w') as f:
                     ujson.dump(cookies, f)
+
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -105,31 +103,12 @@ def my_opener():
     return opener
 
 
-class MyThread(threading.Thread):
-
-    def __init__(self, func, args=()):
-        super(MyThread, self).__init__()
-        self.func = func
-        self.args = args
-        self.result = None
-
-    def run(self):
-        self.result = self.func(*self.args)
-
-    def get_result(self):
-        try:
-            return self.result
-        except AttributeError:
-            return None
-
-
 class CustomFilter(BaseFilter):
     def __init__(self, text):
         self.text = text
 
     def filter(self, message):
-        if re.search(self.text, message.text):
-            return True
+        return self.text in message.text
 
 
 # 定义菜单按钮
@@ -146,20 +125,20 @@ def build_menu(buttons,
     return menu
 
 
-# 预缓存 - 正在热映
+# 预缓存 - 正在热映中的电影的影评词云图片
 def preload():
     def preload_img():
-        movie_list, *_ = funcs.load()
-        for i in movie_list:
-            if os.path.exists(os.getcwd() + "./img/" + i['id'] + '.jpg') is False:
-                print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') +
-                      '：' + "预缓存，电影ID：" + i['id'])
-                funcs.save_img(i['id'])
+        *_, movie_id_list = data_funcs.load()
+        img_dir = Path('img')
+        for id_ in movie_id_list:
+            if Path(img_dir, id_).exists() is False:
+                print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：预缓存，电影ID{id_}")
+                data_funcs.save_img(id_)
                 time.sleep(60)
 
     time.sleep(600)
     t = threading.Thread(target=preload_img)
-    print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "周期性任务 - 预缓存")
+    print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：周期性任务 - 预缓存")
     t.setDaemon(True)
     t.start()
 
@@ -167,9 +146,10 @@ def preload():
 def removal():
     def remove_img():
         time.sleep(21600)
-        print(datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S') + '：' + "周期性任务 - 清除词云图片")
-        for item in os.listdir(os.getcwd() + "/img"):
-            os.remove(os.path.join(os.getcwd() + "/img", item))
+        print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：周期性任务 - 清除词云图片")
+        img_dir = Path('img')
+        for img_file in img_dir.iterdir():
+            Path.unlink(img_file)
 
     s = threading.Thread(target=remove_img)
     s.setDaemon(True)
