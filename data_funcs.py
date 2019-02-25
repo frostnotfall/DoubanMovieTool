@@ -81,6 +81,31 @@ def new_movies():
     return movie_list, movie_id_list
 
 
+def top250(page_num):
+    if page_num == 1:
+        with utils.my_opener().open('https://movie.douban.com/top250') as html_res:
+            html_data = html_res.read().decode('utf-8')
+    else:
+        with utils.my_opener().open(f'https://movie.douban.com/top250?'
+                                    f'start={str((page_num - 1) * 25)}&filter=') as html_res:
+            html_data = html_res.read().decode('utf-8')
+
+    soup = BeautifulSoup(html_data, 'lxml')
+    grid_view = soup.find('ol', class_='grid_view')
+
+    movie_list = list()
+    movie_id_list = list()
+
+    for i in grid_view.find_all('div', class_='info'):
+        movie_name = i.find('span', class_='title').text
+        movie_list.append(movie_name)
+        movie_url = i.div.a.get('href')
+        movie_id = id_pattern.search(movie_url).group()
+        movie_id_list.append('movie ' + movie_id)
+
+    return movie_list, movie_id_list
+
+
 def movie_search(movie_name):
     with utils.my_opener().open(
             f'https://api.douban.com/v2/movie/search?tag={parse.quote(movie_name)}') as html_data:

@@ -2,7 +2,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 __pycache__/
-.idea/
 img/
 venv/
+.idea/
 config.py

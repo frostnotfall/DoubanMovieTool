@@ -35,7 +35,7 @@ elif run_mode == 'polling':
     updater = Updater(token)
     dispatcher = updater.dispatcher
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.WARN)
 
 
 # decorater:不用每定义一个函数都要用handler以及add_handler
@@ -85,6 +85,7 @@ def start(bot, update):
         KeyboardButton(text="正在热映"),
         KeyboardButton(text="即将上映"),
         KeyboardButton(text="新片榜"),
+        KeyboardButton(text="Top250"),
         KeyboardButton(text="快捷搜索"),
         KeyboardButton(text="其它搜索方式(旧接口，可能不准确)"),
     ]
@@ -117,7 +118,7 @@ def now_playing(bot, update):
         button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
     reply_markup = InlineKeyboardMarkup(utils.build_menu(button_list, n_cols=2))
     bot.send_message(chat_id=update.message.chat_id,
-                     text="以下是正在热映的电影，请点击按钮查看详情，稍后会生成影评关键词",
+                     text="以下是正在热映的电影，请点击按钮查看详情",
                      reply_markup=reply_markup)
 
     end_time = datetime.datetime.now()
@@ -174,6 +175,86 @@ def coming(bot, update):
 
     end_time = datetime.datetime.now()
     print("即将上映-执行时间:", end_time - start_time)
+
+
+# “Top250”功能，自定义的消息过滤方法，发送 InlineKeyboardButton
+@dispatcher.run_async
+@command(MessageHandler, utils.CustomFilter('Top250'))
+@send_typing_action
+def top250_message(bot, update):
+    start_time = datetime.datetime.now()
+
+    user_name = update.message.from_user.username
+    print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：用户 {user_name} 使用 Top250")
+
+    footer_buttons = list()
+    footer_buttons.append(InlineKeyboardButton('第1页', callback_data='Top250 1'))
+    footer_buttons.append(InlineKeyboardButton('下一页', callback_data='Top250 2'))
+    footer_buttons.append(InlineKeyboardButton('最后一页', callback_data='Top250 10'))
+
+    movie_list, movie_id_list = data_funcs.top250(1)
+    range_len_movie_list = range(len(movie_list))
+    button_list = list()
+    for i in range_len_movie_list:
+        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
+
+    reply_markup = InlineKeyboardMarkup(utils.build_menu(button_list,
+                                                         n_cols=2,
+                                                         footer_buttons=footer_buttons))
+
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="以下是电影Top250，请点击按钮查看详情",
+                     reply_markup=reply_markup)
+
+    end_time = datetime.datetime.now()
+    print("Top250-执行时间:", end_time - start_time)
+
+
+# “Top250”功能，InlineKeyboardButton回调处理，更改电影列表
+@dispatcher.run_async
+@command(CallbackQueryHandler, pattern=r'Top250\s[0-9]+')
+@send_typing_action
+def top250_keyboard(bot, update):
+    start_time = datetime.datetime.now()
+
+    bot.answer_callback_query(callback_query_id=update.callback_query.id,
+                              text='正在获取Top250电影列表，请稍后')
+
+    try:
+        *_, page_num = update.callback_query.data.split()
+        page_num = int(page_num)
+        print(page_num)
+    except ValueError:
+        page_num = 1
+
+    user_name = update.callback_query.from_user.username,
+    print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：用户 {user_name} 使用 Top250")
+
+    footer_buttons = list()
+    if page_num != 1:
+        footer_buttons.append(InlineKeyboardButton('最前一页', callback_data=f'Top250 1'))
+        footer_buttons.append(InlineKeyboardButton('上一页', callback_data=f'Top250 {page_num - 1}'))
+    footer_buttons.append(InlineKeyboardButton(f'第{page_num}页', callback_data=f'Top250 {page_num}'))
+    if page_num != 10:
+        footer_buttons.append(InlineKeyboardButton('下一页', callback_data=f'Top250 {page_num + 1}'))
+        footer_buttons.append(InlineKeyboardButton('最后一页', callback_data=f'Top250 10'))
+
+    movie_list, movie_id_list = data_funcs.top250(page_num)
+    range_len_movie_list = range(len(movie_list))
+    button_list = list()
+    for i in range_len_movie_list:
+        button_list.append(InlineKeyboardButton(movie_list[i], callback_data=movie_id_list[i]))
+
+    reply_markup = InlineKeyboardMarkup(utils.build_menu(button_list,
+                                                         n_cols=2,
+                                                         footer_buttons=footer_buttons))
+    bot.edit_message_text(chat_id=update.callback_query.message.chat_id,
+                          message_id=update.callback_query.message.message_id,
+                          text="以下是电影Top250，请点击按钮查看详情",
+                          reply_markup=reply_markup)
+
+    end_time = datetime.datetime.now()
+    print("Top250-执行时间:", end_time - start_time)
 
 
 # “快捷搜索”功能
@@ -289,21 +370,25 @@ def movie_keyboard(bot, update):
     start_time = datetime.datetime.now()
 
     bot.answer_callback_query(callback_query_id=update.callback_query.id,
-                              text="正在获取该电影的详细内容，请稍后")
+                              text="正在获取该电影的详细信息，请稍后")
 
     *_, id_ = update.callback_query.data.split()
     user_name = update.callback_query.from_user.username
     print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：用户 {user_name} 查询电影，ID：{id_}")
 
+    msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
+                              text="正在生成 Instant View 页面，请稍等").message_id
+
     url, score = data_funcs.movie_info(id_)
 
-    bot.send_message(chat_id=update.callback_query.message.chat_id,
-                     text=url,
-                     reply_markup=InlineKeyboardMarkup(
-                         utils.build_menu(
-                             [InlineKeyboardButton("生成影评词云",
-                                                   callback_data=f'comment_wordcloud {id_}')],
-                             n_cols=1)) if score != '暂无评分' else None)
+    bot.edit_message_text(chat_id=update.callback_query.message.chat_id,
+                          message_id=msg_id,
+                          text=url,
+                          reply_markup=InlineKeyboardMarkup(
+                              utils.build_menu(
+                                  [InlineKeyboardButton("生成影评词云",
+                                                        callback_data=f'comment_wordcloud {id_}')],
+                                  n_cols=1)) if score != '暂无评分' else None)
 
     end_time = datetime.datetime.now()
     print("电影详情-执行时间:", end_time - start_time)
@@ -329,14 +414,19 @@ def comment_wordcloud(bot, update):
 
     except FileNotFoundError:
         bot.answer_callback_query(callback_query_id=update.callback_query.id,
-                                  text='正在生成影评关键词，请稍后')
+                                  text='正在生成词云图片，请稍等')
 
         print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}："
               f"电影ID：{id_} 未缓存，正在请求URL获取评论")
 
+        msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
+                                  text="正在生成词云图片，请稍等").message_id
         data_funcs.save_img(id_)
         bot.send_photo(chat_id=update.callback_query.message.chat_id,
                        photo=open(f"./img/{id_}.jpg", 'rb'))
+        bot.edit_message_text(chat_id=update.callback_query.message.chat_id,
+                              message_id=msg_id,
+                              text='已生成词云图片')
 
     end_time = datetime.datetime.now()
     print("生成影评词云-执行时间:", end_time - start_time)
@@ -350,17 +440,21 @@ def actor_keyboard(bot, update):
     start_time = datetime.datetime.now()
 
     bot.answer_callback_query(callback_query_id=update.callback_query.id,
-                              text='正在获取该演员的详细内容，请稍后')
+                              text='正在获取该演员的详细信息，请稍后')
 
     *_, id_ = update.callback_query.data.split()
     user_name = update.callback_query.from_user.username
 
     print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：用户 {user_name} 查询演员，ID：{id_}")
 
+    msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
+                              text="正在生成 Instant View 页面，请稍等").message_id
+
     url = data_funcs.actor_info(id_)
 
-    bot.send_message(chat_id=update.callback_query.message.chat_id,
-                     text=url)
+    bot.edit_message_text(chat_id=update.callback_query.message.chat_id,
+                          message_id=msg_id,
+                          text=url)
 
     end_time = datetime.datetime.now()
     print("演员信息-执行时间:", end_time - start_time)
@@ -375,18 +469,22 @@ def inline_info(bot, update):
     callback_type, id_ = update.chosen_inline_result.result_id.split()
     user_name = update.chosen_inline_result.from_user.username
 
+    msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
+                              text="正在生成 Instant View 页面，请稍等").message_id
+
     if callback_type == 'movie':
         print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}："
               f"用户 {user_name} 查询电影，ID：{id_}")
 
         url, score = data_funcs.movie_info(id_)
 
-        bot.send_message(chat_id=update.chosen_inline_result.from_user.id,
-                         text=url,
-                         reply_markup=InlineKeyboardMarkup(utils.build_menu(
-                             [InlineKeyboardButton("生成影评词云",
-                                                   callback_data=f'comment_wordcloud {id_}')],
-                             n_cols=1)) if score != '暂无评分' else None)
+        bot.edit_message_text(chat_id=update.chosen_inline_result.from_user.id,
+                              message_id=msg_id,
+                              text=url,
+                              reply_markup=InlineKeyboardMarkup(utils.build_menu(
+                                  [InlineKeyboardButton("生成影评词云",
+                                                        callback_data=f'comment_wordcloud {id_}')],
+                                  n_cols=1)) if score != '暂无评分' else None)
 
     if callback_type == 'actor':
         print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}："
@@ -394,8 +492,9 @@ def inline_info(bot, update):
 
         url = data_funcs.actor_info(id_)
 
-        bot.send_message(chat_id=update.chosen_inline_result.from_user.id,
-                         text=url)
+        bot.edit_message_text(chat_id=update.chosen_inline_result.from_user.id,
+                              message_id=msg_id,
+                              text=url)
 
     end_time = datetime.datetime.now()
 

@@ -48,7 +48,7 @@ async def aiohttp_check_cookie():
         async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
                                          headers=head,
                                          cookies=cookies) as session:
-            async with session.get('https://movie.douban.com') as res:
+            async with session.get('https://movie.douban.com'):
                 pass
     except (ValueError, FileNotFoundError):
         async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(),
@@ -92,13 +92,13 @@ def my_opener():
         opener = request.build_opener(request.HTTPCookieProcessor(cookie))
     except (FileNotFoundError, cookiejar.LoadError):
         opener = save_cookie()
+    else:
+        header = []
 
-    header = []
-
-    for key, value in head.items():
-        elem = (key, value)
-        header.append(elem)
-    opener.add_headers = header
+        for key, value in head.items():
+            elem = (key, value)
+            header.append(elem)
+        opener.add_headers = header
 
     return opener
 
