@@ -223,7 +223,6 @@ def top250_keyboard(bot, update):
     try:
         *_, page_num = update.callback_query.data.split()
         page_num = int(page_num)
-        print(page_num)
     except ValueError:
         page_num = 1
 
