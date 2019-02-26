@@ -468,7 +468,7 @@ def inline_info(bot, update):
     callback_type, id_ = update.chosen_inline_result.result_id.split()
     user_name = update.chosen_inline_result.from_user.username
 
-    msg_id = bot.send_message(chat_id=update.callback_query.message.chat_id,
+    msg_id = bot.send_message(chat_id=update.chosen_inline_result.from_user.id,
                               text="正在生成 Instant View 页面，请稍等").message_id
 
     if callback_type == 'movie':
