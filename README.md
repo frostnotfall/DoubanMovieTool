@@ -24,17 +24,12 @@ A telegram bot for douban movie，一个tetegeam bot, 关于豆瓣电影的工�
 
 截图
 ====
-* 功能
 
-![功能](functions.jpg)
-* 正在热映
+![功能](functions.jpg)![Top250](Top250.jpg)
 
-![正在热映](nowplaying.jpg)
-* 快捷搜索
+![快捷搜索](shortcut_search.jpg)
 
-![快捷搜索](shortcut_search.png)
-* Instant View
+![Instant View](InstantView.jpg)![Instant View](InstantViewWeb.jpg)
 
-![Instant View](InstantView.jpg)
 
 
