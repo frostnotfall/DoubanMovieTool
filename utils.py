@@ -7,38 +7,42 @@ import datetime
 import random
 import threading
 import time
-import ujson
 from http import cookiejar
 from pathlib import Path
-from urllib import request
 
 import aiohttp
+import requests
+import ujson
 from telegram.ext import (BaseFilter)
 
 import data_funcs
 
 ua = [
-    "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)\
-     Chrome/62.0.3202.94 YaBrowser/17.11.0.2191 Yowser/2.5 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
-     Chrome/64.0.3282.189 Safari/537.36 Vivaldi/1.95.1077.60",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:59.0) Gecko/20100101 Firefox/59.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
-     Chrome/58.0.3029.110 Safari/537.36 Edge/16.16299",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko)\
-     Chrome/50.0.2661.102 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)\
-     Chrome/64.0.3282.189 Safari/537.36 Vivaldi/1.95.1077.60"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/78.0.3904.99 Safari/537.36 Vivaldi/2.9.1705.41",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:70.0) Gecko/20100101 Firefox/70.0",
+    "Mozilla/5.0 (iPad; CPU OS 11_0 like Mac OS X) AppleWebKit/604.1.34 (KHTML, like Gecko) "
+    "Version/11.0 Mobile/15A5341f Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/70.0.3538.102 Safari/537.36 Edge/18.18363"
 ]
-ua = random.choice(ua)
-head = {'Connection': 'Keep-Alive',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;'
-                  'q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'zh-CN,zh;q=0.9',
-        'Cache-Control': 'max-age=0',
-        'User-Agent': ua
-        }
+
+head = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,""image/webp,"
+              "image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "DNT": "1",
+    "Host": "movie.douban.com",
+    "Pragma": "no-cache",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": random.choice(ua)
+}
 
 
 async def aiohttp_check_cookie():
@@ -69,38 +73,15 @@ with open('cookies.json', 'r', encoding="UTF-8") as f:
     cookies = ujson.load(f)
 
 
-def save_cookie():
-    filename = 'cookie.txt'
-    cookie = cookiejar.MozillaCookieJar(filename)
-    opener = request.build_opener(request.HTTPCookieProcessor(cookie))
-    header = []
-
-    for key, value in head.items():
-        elem = (key, value)
-        header.append(elem)
-    opener.add_headers = header
-
-    opener.open('https://movie.douban.com')
-    cookie.save(ignore_discard=True, ignore_expires=True)
-    return opener
-
-
 def my_opener():
-    try:
-        cookie = cookiejar.MozillaCookieJar()
-        cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
-        opener = request.build_opener(request.HTTPCookieProcessor(cookie))
-    except (FileNotFoundError, cookiejar.LoadError):
-        opener = save_cookie()
-    else:
-        header = []
+    filename = 'cookie.txt'
+    session = requests.Session()
+    session.cookies = cookiejar.MozillaCookieJar(filename)
+    session.headers.update(head)
+    session.get('https://movie.douban.com')
+    session.cookies.save(ignore_discard=True, ignore_expires=True)
 
-        for key, value in head.items():
-            elem = (key, value)
-            header.append(elem)
-        opener.add_headers = header
-
-    return opener
+    return session
 
 
 class CustomFilter(BaseFilter):

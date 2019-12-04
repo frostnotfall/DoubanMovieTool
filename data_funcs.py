@@ -3,15 +3,14 @@
 
 
 import asyncio
-import datetime
 import re
-import ujson
 from urllib import parse
 
 import aiohttp
 import jieba
 import numpy
 import pandas
+import ujson
 from aiograph import Telegraph
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
@@ -27,8 +26,8 @@ imdb_pattern = re.compile(r"^http://www.imdb.com")
 
 
 def load():
-    with utils.my_opener().open('https://movie.douban.com/cinema/nowplaying/beijing/') as html_res:
-        html_data = html_res.read().decode('utf-8')
+    with utils.my_opener().get('https://movie.douban.com/cinema/nowplaying/beijing/') as html_res:
+        html_data = html_res.text
 
     soup = BeautifulSoup(html_data, 'lxml')
     nowplaying = soup.find('div', id='nowplaying')
@@ -45,8 +44,8 @@ def load():
 
 
 def coming():
-    with utils.my_opener().open('https://movie.douban.com/coming') as html_res:
-        html_data = html_res.read().decode('utf-8')
+    with utils.my_opener().get('https://movie.douban.com/coming') as html_res:
+        html_data = html_res.text
 
     soup = BeautifulSoup(html_data, 'lxml')
     coming_list = soup.find('table', class_="coming_list").find('tbody')
@@ -64,8 +63,8 @@ def coming():
 
 
 def new_movies():
-    with utils.my_opener().open('https://movie.douban.com/chart') as html_res:
-        html_data = html_res.read().decode('utf-8')
+    with utils.my_opener().get('https://movie.douban.com/chart') as html_res:
+        html_data = html_res.text
 
     soup = BeautifulSoup(html_data, 'lxml')
     movie_list = list()
@@ -83,12 +82,12 @@ def new_movies():
 
 def top250(page_num):
     if page_num == 1:
-        with utils.my_opener().open('https://movie.douban.com/top250') as html_res:
-            html_data = html_res.read().decode('utf-8')
+        with utils.my_opener().get('https://movie.douban.com/top250') as html_res:
+            html_data = html_res.text
     else:
-        with utils.my_opener().open(f'https://movie.douban.com/top250?'
-                                    f'start={str((page_num - 1) * 25)}&filter=') as html_res:
-            html_data = html_res.read().decode('utf-8')
+        with utils.my_opener().get(f'https://movie.douban.com/top250?'
+                                   f'start={str((page_num - 1) * 25)}&filter=') as html_res:
+            html_data = html_res.text
 
     soup = BeautifulSoup(html_data, 'lxml')
     grid_view = soup.find('ol', class_='grid_view')
@@ -107,7 +106,7 @@ def top250(page_num):
 
 
 def movie_search(movie_name):
-    with utils.my_opener().open(
+    with utils.my_opener().get(
             f'https://api.douban.com/v2/movie/search?tag={parse.quote(movie_name)}') as html_data:
         json_data = ujson.loads(html_data.read().decode('utf-8'))
 
@@ -124,7 +123,7 @@ def movie_search(movie_name):
 
 
 def actor_search(actor_name):
-    with utils.my_opener().open(
+    with utils.my_opener().get(
             f'https://movie.douban.com/celebrities/search?search_text={parse.quote(actor_name)}') \
             as html_res:
         html_data = html_res.read().decode('UTF-8')
@@ -150,8 +149,8 @@ def movie_info(id_):
     telegraph = Telegraph()
 
     async def get_info(id_):
-        await telegraph.create_account('DoubanMovieTool')
-        with utils.my_opener().open(f'https://movie.douban.com/subject/{id_}/') as html_res:
+        await telegraph.create_account('DoubanMovieBot')
+        with utils.my_opener().get(f'https://movie.douban.com/subject/{id_}/') as html_res:
             html_data = html_res.read().decode('UTF-8')
         soup = BeautifulSoup(html_data, 'lxml')
 
@@ -163,6 +162,13 @@ def movie_info(id_):
         if score == '':
             score = '暂无评分'
         score_html = f'<strong>评分：</strong>{score}<br />'
+
+        # rating part
+        try:
+            votes_num = soup.find('span', property="v:votes").text
+            votes_num_html = f'<strong>评分人数：</strong>{votes_num}<br/>'
+        except AttributeError:
+            votes_num_html = f'<strong>评分人数：</strong>暂无评分人数<br/>'
 
         # info part
         info = soup.find('div', id='info')
@@ -193,15 +199,20 @@ def movie_info(id_):
             publish_date_set.add(publish_date.text)
         publish_date_html = f'''<strong>上映日期：</strong>{' / '.join(publish_date_set)}<br/>'''
         try:
+            runtime = info.find('span', property="v:runtime").text
+            runtime_html = f'<strong>片长：</strong>{runtime}<br/>'
+        except AttributeError:
+            runtime_html = f'<strong>片长：</strong>暂无信息<br/>'
+        try:
             aka_html = f'''<strong>又名：</strong>{
             str(info.find('span', text='又名:').next_sibling).strip()}<br />'''
         except AttributeError:
             aka_html = f'''<strong>又名：</strong>暂无信息<br />'''
         imdb = str(info.find(href=imdb_pattern))
-        imdb_html = f'''<strong>IMDb链接：</strong>{imdb if imdb is None else '暂无imdb信息'}<br />'''
-        info_html = f'{image_html}<h3>电影信息</h3>{score_html}{directors_html}{author_html}' \
-            f'{actors_html}{genre_html}{country_html}{language_html}{publish_date_html}' \
-            f'{aka_html}{imdb_html}'
+        imdb_html = f'''<strong>IMDb链接：</strong>{imdb if imdb is not None else '暂无imdb信息'}<br />'''
+        info_html = f'{image_html}<h3>电影信息</h3>{score_html}{votes_num_html}{directors_html}' \
+                    f'{author_html}{actors_html}{genre_html}{country_html}{language_html}{publish_date_html}' \
+                    f'{runtime_html}{aka_html}{imdb_html}'
         info_html = info_html.replace('/celebrity', 'https://movie.douban.com/celebrity')
 
         # summary part
@@ -214,8 +225,8 @@ def movie_info(id_):
 
         # awards part
         if soup.find('div', class_='mod') is not None:
-            with utils.my_opener().open(f'https://movie.douban.com/subject/{id_}/awards/') as html_res:
-                html_data = html_res.read().decode('utf-8')
+            with utils.my_opener().get(f'https://movie.douban.com/subject/{id_}/awards/') as html_res:
+                html_data = html_res.text
             soup = BeautifulSoup(html_data, 'lxml')
             content = soup.find('div', id='content')
             awards_html = f'<h3>{content.h1.text}：</h3>'
@@ -230,7 +241,7 @@ def movie_info(id_):
             page = await telegraph.create_page(title, f'{info_html}{summary_html}{awards_html}')
         else:
             page = await telegraph.create_page(title, f'{info_html}{summary_html}')
-        print('生成Instant View， URL:', page.url)
+        print('生成电影Instant View， URL:', page.url)
 
         return page.url, score
 
@@ -248,8 +259,8 @@ def actor_info(id_):
     telegraph = Telegraph()
 
     async def main():
-        await telegraph.create_account('DoubanMovieTool')
-        with utils.my_opener().open(f'https://movie.douban.com/celebrity/{id_}/') as html_res:
+        await telegraph.create_account('DoubanMovieBot')
+        with utils.my_opener().get(f'https://movie.douban.com/celebrity/{id_}/') as html_res:
             html_data = html_res.read().decode('UTF-8')
         soup = BeautifulSoup(html_data, 'lxml')
 
@@ -272,8 +283,8 @@ def actor_info(id_):
 
         # awards part
         if soup.find('div', class_='mod').find('div', class_='hd') is not None:
-            with utils.my_opener().open(f'https://movie.douban.com/celebrity/{id_}/awards/') as html_res:
-                html_data = html_res.read().decode('utf-8')
+            with utils.my_opener().get(f'https://movie.douban.com/celebrity/{id_}/awards/') as html_res:
+                html_data = html_res.text
             soup = BeautifulSoup(html_data, 'lxml')
             content = soup.find('div', id='content')
             content_html = f'<h3>{content.h1.text}</h3>'
@@ -286,7 +297,7 @@ def actor_info(id_):
             page = await telegraph.create_page(actor_name, f'{info_html}{summary_html}{content_html}')
         else:
             page = await telegraph.create_page(actor_name, f'{info_html}{summary_html}')
-        print('生成Instant View， URL:', page.url)
+        print('生成演员Instant View， URL:', page.url)
 
         return page.url
 
@@ -299,7 +310,7 @@ def actor_info(id_):
 
 
 def subject_suggest(name):
-    with utils.my_opener().open(
+    with utils.my_opener().get(
             f'https://movie.douban.com/j/subject_suggest?q={parse.quote(name)}') as html_data:
         json_data = ujson.loads(html_data.read().decode('utf-8'))
         suggest_result_list = list()
@@ -360,7 +371,7 @@ def get_comments(id_):
 
     all_final_comments = str()
     for task in tasks:
-        all_final_comments = all_final_comments + task.result()
+        all_final_comments += task.result()
 
     return all_final_comments
 
@@ -390,9 +401,5 @@ def save_img(id_):
         temp = (key, word_frequency[key])
         word_frequency_list.append(temp)
 
-    try:
-        wordcloud = wordcloud.fit_words(dict(word_frequency_list))
-    except ValueError:
-        print(f"{datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}：电影ID：{id_} 获取评论失败")
-        return
+    wordcloud = wordcloud.fit_words(dict(word_frequency_list))
     wordcloud.to_file(f"./img/{id_}.jpg")
