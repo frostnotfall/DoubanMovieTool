@@ -10,3 +10,4 @@ pandas
 python-telegram-bot
 ujson
 wordcloud
+requests
