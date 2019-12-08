@@ -126,7 +126,7 @@ def actor_search(actor_name):
     with utils.my_opener().get(
             f'https://movie.douban.com/celebrities/search?search_text={parse.quote(actor_name)}') \
             as html_res:
-        html_data = html_res.read().decode('UTF-8')
+        html_data = html_res.text
 
     soup = BeautifulSoup(html_data, 'lxml')
     actor_list = list()
@@ -151,7 +151,7 @@ def movie_info(id_):
     async def get_info(id_):
         await telegraph.create_account('DoubanMovieBot')
         with utils.my_opener().get(f'https://movie.douban.com/subject/{id_}/') as html_res:
-            html_data = html_res.read().decode('UTF-8')
+            html_data = html_res.text
         soup = BeautifulSoup(html_data, 'lxml')
 
         # json part
@@ -261,7 +261,7 @@ def actor_info(id_):
     async def main():
         await telegraph.create_account('DoubanMovieBot')
         with utils.my_opener().get(f'https://movie.douban.com/celebrity/{id_}/') as html_res:
-            html_data = html_res.read().decode('UTF-8')
+            html_data = html_res.text
         soup = BeautifulSoup(html_data, 'lxml')
 
         # info part
