@@ -10,7 +10,7 @@ from telegram import (Bot, ChatAction, InlineKeyboardButton, InlineKeyboardMarku
                       InlineQueryResultArticle, InputTextMessageContent, KeyboardButton, ParseMode,
                       ReplyKeyboardMarkup)
 from telegram.ext import (CallbackQueryHandler, ChosenInlineResultHandler, CommandHandler, Dispatcher,
-                          Updater, InlineQueryHandler, MessageHandler, Updater)
+                          InlineQueryHandler, MessageHandler, Updater)
 
 import data_funcs
 import utils
